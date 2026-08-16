@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { groupFromLocation } from './api'
 import { client } from './client'
+import { readSetting, writeSetting } from './storage'
 import type { Comment, Diff, FileDiff, Status } from './types'
 import { DiffView } from './components/DiffView'
 import { Divider } from './components/Divider'
@@ -28,7 +29,7 @@ const SIDEBAR_KEY = 'sa.sidebar.width'
 const SPLIT_KEY = 'sa.split'
 
 function storedSplitRatio(): number {
-  const stored = window.localStorage.getItem(SPLIT_KEY)
+  const stored = readSetting(SPLIT_KEY)
   if (stored === null) return SPLIT_DEFAULT
   const ratio = Number(stored)
   if (!Number.isFinite(ratio) || ratio < 0 || ratio > 1) return SPLIT_DEFAULT
@@ -38,7 +39,7 @@ function storedSplitRatio(): number {
 function storedSidebarWidth(): number {
   // An unset entry reads as null, which Number() would happily turn into a
   // collapsed sidebar, so the absence is checked before the value.
-  const stored = window.localStorage.getItem(SIDEBAR_KEY)
+  const stored = readSetting(SIDEBAR_KEY)
   if (stored === null) return SIDEBAR_DEFAULT
   const width = Number(stored)
   return Number.isFinite(width) && width >= 0 && width <= SIDEBAR_MAX ? width : SIDEBAR_DEFAULT
@@ -68,7 +69,7 @@ export function App() {
   }, [theme])
 
   useEffect(() => {
-    window.localStorage.setItem(SIDEBAR_KEY, String(sidebarWidth))
+    writeSetting(SIDEBAR_KEY, String(sidebarWidth))
   }, [sidebarWidth])
 
   const resizeSidebar = useCallback((clientX: number) => {
@@ -81,7 +82,7 @@ export function App() {
   const toggleSidebar = () => setSidebarWidth((w) => (w === 0 ? SIDEBAR_DEFAULT : 0))
 
   useEffect(() => {
-    window.localStorage.setItem(SPLIT_KEY, String(splitRatio))
+    writeSetting(SPLIT_KEY, String(splitRatio))
   }, [splitRatio])
 
   // Minimising one pane hands its room to the other; bringing it back splits
@@ -218,6 +219,10 @@ export function App() {
   const diffPane =
     selectedDiff && selectedFile ? (
       <DiffView
+        // The server picks split or unified per file, and that choice is
+        // the initial state of the view; without a key React keeps the
+        // first file's state for every file after it.
+        key={selectedFile.id}
         group={group}
         diff={selectedDiff}
         file={selectedFile}

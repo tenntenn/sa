@@ -97,10 +97,7 @@ export function DiffView({ group, diff, file, comments, narrow = false, onChange
     })
   }
 
-  const select = (side: Side, line: number, extend: boolean) => {
-    if (line <= 0) return
-    dragging.current = true
-    setDrafting(false)
+  const pick = (side: Side, line: number, extend: boolean) => {
     setSelection((current) => {
       const grow = extend || (current !== null && current.side === side)
       if (grow && current && current.side === side) {
@@ -109,6 +106,26 @@ export function DiffView({ group, diff, file, comments, narrow = false, onChange
       }
       return { side, start: line, end: line }
     })
+  }
+
+  // Pressing on the gutter may be the start of a drag, so the form waits for
+  // the pointer to come up.
+  const select = (side: Side, line: number, extend: boolean) => {
+    if (line <= 0) return
+    dragging.current = true
+    setDrafting(false)
+    pick(side, line, extend)
+  }
+
+  // Clicking the code itself is never a drag - the pointer is already back
+  // up by the time a click arrives, so waiting for pointerup would wait
+  // forever - and the text stays selectable, which is why it is not a
+  // pointerdown.
+  const selectLine = (side: Side, line: number, extend: boolean) => {
+    if (line <= 0) return
+    dragging.current = false
+    setDrafting(true)
+    pick(side, line, extend)
   }
 
   // Dragging across the gutter grows the range under the pointer.
@@ -216,6 +233,7 @@ export function DiffView({ group, diff, file, comments, narrow = false, onChange
           hunks={file.hunks}
           selection={selection}
           onSelect={select}
+          onSelectLine={selectLine}
           onDragOver={dragOver}
           renderExtras={renderExtras}
         />
@@ -224,6 +242,7 @@ export function DiffView({ group, diff, file, comments, narrow = false, onChange
           hunks={file.hunks}
           selection={selection}
           onSelect={select}
+          onSelectLine={selectLine}
           onDragOver={dragOver}
           renderExtras={renderExtras}
         />
@@ -235,7 +254,10 @@ export function DiffView({ group, diff, file, comments, narrow = false, onChange
 interface TableProps {
   hunks: Hunk[]
   selection: Selection | null
+  // onSelect starts a possible drag on the gutter; onSelectLine is a plain
+  // click on the code, which cannot become one.
   onSelect: (side: Side, line: number, extend: boolean) => void
+  onSelectLine: (side: Side, line: number, extend: boolean) => void
   onDragOver: (side: Side, line: number) => void
   renderExtras: (side: Side, line: number) => React.ReactNode
 }
@@ -249,7 +271,7 @@ function isSelected(selection: Selection | null, side: Side, line: number): bool
   )
 }
 
-function UnifiedTable({ hunks, selection, onSelect, onDragOver, renderExtras }: TableProps) {
+function UnifiedTable({ hunks, selection, onSelect, onSelectLine, onDragOver, renderExtras }: TableProps) {
   return (
     <table className="diff-table unified">
       <colgroup>
@@ -271,10 +293,23 @@ function UnifiedTable({ hunks, selection, onSelect, onDragOver, renderExtras }: 
             {hunk.lines.map((line, li) => {
               const side = lineSide(line)
               const num = lineNumber(line)
-              const extras = renderExtras(side, num)
+              // A context line stands on both sides, so a comment on
+              // either of them belongs under it, and the old gutter
+              // selects the old side rather than nothing.
+              const oldExtras = line.oldNumber > 0 ? renderExtras('old', line.oldNumber) : null
+              const newExtras = line.newNumber > 0 ? renderExtras('new', line.newNumber) : null
+              const extras =
+                oldExtras || newExtras ? (
+                  <>
+                    {oldExtras}
+                    {newExtras}
+                  </>
+                ) : null
+              const selected =
+                isSelected(selection, 'old', line.oldNumber) || isSelected(selection, 'new', line.newNumber)
               return (
                 <Fragment key={li}>
-                  <tr className={`line ${line.kind}${isSelected(selection, side, num) ? ' selected' : ''}`}>
+                  <tr className={`line ${line.kind}${selected ? ' selected' : ''}`}>
                     <td
                       className="num clickable"
                       onPointerDown={(ev) => onSelect('old', line.oldNumber, ev.shiftKey)}
@@ -290,7 +325,7 @@ function UnifiedTable({ hunks, selection, onSelect, onDragOver, renderExtras }: 
                       {line.newNumber > 0 ? line.newNumber : ''}
                     </td>
                     <td className="marker">{marker(line.kind)}</td>
-                    <td className="code" onClick={(ev) => onSelect(side, num, ev.shiftKey)}>
+                    <td className="code" onClick={(ev) => onSelectLine(side, num, ev.shiftKey)}>
                       {line.content || ' '}
                       {line.noNewline && <span className="hint"> (no newline at end of file)</span>}
                     </td>
@@ -344,7 +379,7 @@ function buildSplitRows(lines: Line[]): SplitRow[] {
   return rows
 }
 
-function SplitTable({ hunks, selection, onSelect, onDragOver, renderExtras }: TableProps) {
+function SplitTable({ hunks, selection, onSelect, onSelectLine, onDragOver, renderExtras }: TableProps) {
   return (
     <table className="diff-table split">
       <colgroup>
@@ -383,7 +418,7 @@ function SplitTable({ hunks, selection, onSelect, onDragOver, renderExtras }: Ta
                       className={`code side ${row.left ? row.left.kind : 'empty'}${
                         isSelected(selection, 'old', row.left?.oldNumber ?? -1) ? ' selected' : ''
                       }`}
-                      onClick={(ev) => row.left && onSelect('old', row.left.oldNumber, ev.shiftKey)}
+                      onClick={(ev) => row.left && onSelectLine('old', row.left.oldNumber, ev.shiftKey)}
                     >
                       {row.left ? renderSegments(row.left.content, oldSegments) : ''}
                     </td>
@@ -398,7 +433,7 @@ function SplitTable({ hunks, selection, onSelect, onDragOver, renderExtras }: Ta
                       className={`code side ${row.right ? row.right.kind : 'empty'}${
                         isSelected(selection, 'new', row.right?.newNumber ?? -1) ? ' selected' : ''
                       }`}
-                      onClick={(ev) => row.right && onSelect('new', row.right.newNumber, ev.shiftKey)}
+                      onClick={(ev) => row.right && onSelectLine('new', row.right.newNumber, ev.shiftKey)}
                     >
                       {row.right ? renderSegments(row.right.content, newSegments) : ''}
                     </td>

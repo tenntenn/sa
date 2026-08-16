@@ -1,3 +1,4 @@
+import DOMPurify from 'dompurify'
 import { marked } from 'marked'
 
 /**
@@ -26,45 +27,32 @@ function escapeHTML(s: string): string {
   return s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c] ?? c)
 }
 
-const allowedProtocols = new Set(['http:', 'https:', 'mailto:', 'data:'])
+// Links open away from the page, and they are the only elements that gain
+// an attribute here, so the hook only has to look at them.
+DOMPurify.addHook('afterSanitizeAttributes', (node) => {
+  if (node.tagName === 'A' && node.hasAttribute('href')) {
+    node.setAttribute('target', '_blank')
+    node.setAttribute('rel', 'noreferrer noopener')
+  }
+})
 
+/**
+ * sanitize strips everything executable out of rendered Markdown.
+ *
+ * This used to be a hand-written pass over the parsed DOM, which cannot be
+ * made correct: DOMParser runs with scripting off, where <noscript> holds
+ * markup, and the page that renders the result runs with scripting on,
+ * where it holds text. An attribute closing the tag inside its own value -
+ * <noscript><p title="</noscript><img src=x onerror=...>"> - therefore
+ * passed the check as an attribute and came back as an element. Turning
+ * markup into a DOM safely is a job with a maintained answer, so sa uses it
+ * rather than keeping its own.
+ */
 function sanitize(html: string): string {
-  const doc = new DOMParser().parseFromString(html, 'text/html')
-  doc.querySelectorAll('script, style, iframe, object, embed, form, link, meta').forEach((el) => {
-    el.remove()
+  return DOMPurify.sanitize(html, {
+    // An exported page is one file with the diff frozen into it; nothing in
+    // a preview should be reaching for anything else.
+    FORBID_TAGS: ['style', 'form', 'input', 'button', 'link', 'meta', 'base'],
+    ALLOW_DATA_ATTR: false,
   })
-  doc.querySelectorAll('*').forEach((el) => {
-    for (const attr of Array.from(el.attributes)) {
-      const name = attr.name.toLowerCase()
-      if (name.startsWith('on')) {
-        el.removeAttribute(attr.name)
-        continue
-      }
-      if (name === 'href' || name === 'src') {
-        if (!isSafeURL(attr.value, name)) el.removeAttribute(attr.name)
-      }
-    }
-    if (el.tagName === 'A') {
-      el.setAttribute('target', '_blank')
-      el.setAttribute('rel', 'noreferrer noopener')
-    }
-  })
-  return doc.body.innerHTML
-}
-
-function isSafeURL(value: string, attr: string): boolean {
-  const url = value.trim()
-  if (url === '') return false
-  if (url.startsWith('#') || url.startsWith('/') || url.startsWith('./') || url.startsWith('../')) {
-    return true
-  }
-  try {
-    const parsed = new URL(url, window.location.href)
-    if (!allowedProtocols.has(parsed.protocol)) return false
-    // data: is only ever useful for inline images.
-    if (parsed.protocol === 'data:') return attr === 'src' && url.startsWith('data:image/')
-    return true
-  } catch {
-    return false
-  }
 }

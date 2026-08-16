@@ -5,6 +5,8 @@
  * theme itself, and "auto" means that host wins.
  */
 
+import { readSetting, writeSetting } from './storage'
+
 export type Theme = 'auto' | 'light' | 'dark'
 
 const STORAGE_KEY = 'sa.theme'
@@ -14,7 +16,7 @@ const STORAGE_KEY = 'sa.theme'
 const hostTheme = document.documentElement.getAttribute('data-theme')
 
 export function storedTheme(): Theme {
-  const stored = window.localStorage.getItem(STORAGE_KEY)
+  const stored = readSetting(STORAGE_KEY)
   return stored === 'light' || stored === 'dark' ? stored : 'auto'
 }
 
@@ -26,12 +28,7 @@ export function applyTheme(theme: Theme): void {
   } else {
     root.setAttribute('data-theme', theme)
   }
-  try {
-    if (theme === 'auto') window.localStorage.removeItem(STORAGE_KEY)
-    else window.localStorage.setItem(STORAGE_KEY, theme)
-  } catch {
-    // The choice holds for this page view.
-  }
+  writeSetting(STORAGE_KEY, theme)
 }
 
 /** nextTheme cycles auto → light → dark → auto. */

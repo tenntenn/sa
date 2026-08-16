@@ -125,7 +125,11 @@ export function subscribe(group: string, onChange: () => void): () => void {
   source.onmessage = (ev) => {
     try {
       const data = JSON.parse(ev.data) as { type?: string; group?: string }
-      if (data.type === 'change' && (!data.group || data.group === group)) onChange()
+      // "change" is a new diff or comment; "review" is the Submit button,
+      // which another tab has to hear about too - it is what turns the
+      // page from open to reviewed.
+      const interesting = data.type === 'change' || data.type === 'review'
+      if (interesting && (!data.group || data.group === group)) onChange()
     } catch {
       onChange()
     }

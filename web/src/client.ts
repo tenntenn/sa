@@ -3,6 +3,7 @@ import type { Comment, Diff, Status } from './types'
 import { renderMarkdown } from './markdown'
 import { buildPrompt } from './prompt'
 import { suggestions } from './suggestion'
+import { readSetting, writeSetting } from './storage'
 
 /** PreviewResult is either an embedded mo page or Markdown rendered here. */
 export type PreviewResult =
@@ -138,20 +139,18 @@ function createStaticClient(data: StaticPayload): SaClient {
   const listeners = new Set<() => void>()
 
   const read = (): Comment[] => {
-    try {
-      const stored = window.localStorage.getItem(storageKey)
-      if (stored) return JSON.parse(stored) as Comment[]
-    } catch {
-      // A broken or unavailable storage just means the exported comments.
+    const stored = readSetting(storageKey)
+    if (stored) {
+      try {
+        return JSON.parse(stored) as Comment[]
+      } catch {
+        // Something else wrote there, or the entry was truncated.
+      }
     }
     return data.comments ?? []
   }
   const write = (comments: Comment[]) => {
-    try {
-      window.localStorage.setItem(storageKey, JSON.stringify(comments))
-    } catch {
-      // Comments stay in memory for this page view.
-    }
+    writeSetting(storageKey, JSON.stringify(comments))
     listeners.forEach((fn) => fn())
   }
 
