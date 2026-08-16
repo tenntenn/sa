@@ -1,0 +1,651 @@
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { groupFromLocation } from './api'
+import { client } from './client'
+import { readSetting, writeSetting } from './storage'
+import type { Comment, Diff, FileDiff, Status, Verdict } from './types'
+import { DiffView } from './components/DiffView'
+import { Divider } from './components/Divider'
+import { PreviewPane } from './components/PreviewPane'
+import { Sidebar } from './components/Sidebar'
+import { clampRatio, SplitPane, SPLIT_DEFAULT } from './components/SplitPane'
+import { useNarrowLayout } from './useMediaQuery'
+import { plainKey, shortcuts, typingInto } from './shortcuts'
+import { applyTheme, nextTheme, storedTheme, themeLabel, type Theme } from './theme'
+
+interface Selected {
+  diffId: string
+  fileId: string
+}
+
+/** Pane names the three panes, which a phone shows one at a time. */
+type Pane = 'files' | 'diff' | 'preview'
+
+// The file list is a pane like the others: it can be dragged narrow, and
+// pulling it past the snapping point puts it away entirely.
+const SIDEBAR_DEFAULT = 280
+const SIDEBAR_MAX = 720
+const SIDEBAR_SNAP = 48
+const SIDEBAR_STEP = 24
+const SIDEBAR_KEY = 'sa.sidebar.width'
+const SPLIT_KEY = 'sa.split'
+
+function storedSplitRatio(): number {
+  const stored = readSetting(SPLIT_KEY)
+  if (stored === null) return SPLIT_DEFAULT
+  const ratio = Number(stored)
+  if (!Number.isFinite(ratio) || ratio < 0 || ratio > 1) return SPLIT_DEFAULT
+  return ratio === 0 || ratio === 1 ? ratio : clampRatio(ratio)
+}
+
+function storedSidebarWidth(): number {
+  // An unset entry reads as null, which Number() would happily turn into a
+  // collapsed sidebar, so the absence is checked before the value.
+  const stored = readSetting(SIDEBAR_KEY)
+  if (stored === null) return SIDEBAR_DEFAULT
+  const width = Number(stored)
+  return Number.isFinite(width) && width >= 0 && width <= SIDEBAR_MAX ? width : SIDEBAR_DEFAULT
+}
+
+export function App() {
+  const group = useMemo(() => (client.isStatic ? staticGroupName() : groupFromLocation()), [])
+  const narrow = useNarrowLayout()
+  const [diffs, setDiffs] = useState<Diff[]>([])
+  const [comments, setComments] = useState<Comment[]>([])
+  const [reviewedAt, setReviewedAt] = useState<string | null>(null)
+  const [reviewVerdict, setReviewVerdict] = useState<Verdict | null>(null)
+  const [status, setStatus] = useState<Status | null>(null)
+  const [selected, setSelected] = useState<Selected | null>(null)
+  const [splitRatio, setSplitRatio] = useState(storedSplitRatio)
+  const [pane, setPane] = useState<Pane>('diff')
+  const [error, setError] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [closing, setClosing] = useState(false)
+  const [reviewNote, setReviewNote] = useState<string | null>(null)
+  const [help, setHelp] = useState(false)
+  // foldNudge and viewNudge are how a key reaches the file on screen: the
+  // view owns that state, and a counter is a message it cannot miss.
+  const [foldNudge, setFoldNudge] = useState(0)
+  const [viewNudge, setViewNudge] = useState(0)
+  const [sidebarWidth, setSidebarWidth] = useState(storedSidebarWidth)
+  const [theme, setTheme] = useState<Theme>(storedTheme)
+  const [query, setQuery] = useState('')
+  // Scrolling the diff moves the preview with it, as a fraction of the way
+  // down rather than by line: the two documents do not agree on lines, and
+  // pretending they do lands the reader in the wrong place with more
+  // confidence. It is off the moment the reader says so, and the reader
+  // says so simply by scrolling the preview themselves.
+  const [syncScroll, setSyncScroll] = useState(true)
+  const [scrollTo, setScrollTo] = useState<number | null>(null)
+  const bodyRef = useRef<HTMLDivElement>(null)
+  const searchRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    applyTheme(theme)
+  }, [theme])
+
+  useEffect(() => {
+    writeSetting(SIDEBAR_KEY, String(sidebarWidth))
+  }, [sidebarWidth])
+
+  const resizeSidebar = useCallback((clientX: number) => {
+    const rect = bodyRef.current?.getBoundingClientRect()
+    if (!rect) return
+    const next = clientX - rect.left
+    setSidebarWidth(next < SIDEBAR_SNAP ? 0 : Math.min(SIDEBAR_MAX, next))
+  }, [])
+
+  const toggleSidebar = () => setSidebarWidth((w) => (w === 0 ? SIDEBAR_DEFAULT : 0))
+
+  const focusSearch = useCallback(() => {
+    setSidebarWidth((w) => (w === 0 ? SIDEBAR_DEFAULT : w))
+    if (narrow) setPane('files')
+    window.setTimeout(() => searchRef.current?.focus(), 0)
+  }, [narrow])
+
+  useEffect(() => {
+    writeSetting(SPLIT_KEY, String(splitRatio))
+  }, [splitRatio])
+
+  // Minimising one pane hands its room to the other; bringing it back splits
+  // the room again rather than restoring a width nobody remembers.
+  const toggleDiff = () => setSplitRatio((r) => (r === 0 ? SPLIT_DEFAULT : 0))
+  const togglePreview = () => setSplitRatio((r) => (r === 1 ? SPLIT_DEFAULT : 1))
+
+  const reload = useCallback(async () => {
+    try {
+      const data = await client.load(group)
+      setDiffs(data.diffs)
+      setComments(data.comments)
+      setReviewedAt(data.reviewedAt ?? null)
+      setReviewVerdict(data.reviewVerdict ?? null)
+      setStatus(data.status)
+      setError(null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    }
+  }, [group])
+
+  useEffect(() => {
+    void reload()
+    return client.subscribe(group, () => {
+      void reload()
+    })
+  }, [group, reload])
+
+  // Keep a file selected: the newest diff is what the reviewer just sent.
+  useEffect(() => {
+    if (diffs.length === 0) {
+      setSelected(null)
+      return
+    }
+    setSelected((current) => {
+      if (current) {
+        const diff = diffs.find((d) => d.id === current.diffId)
+        if (diff && diff.files.some((f) => f.id === current.fileId)) return current
+      }
+      const last = diffs[diffs.length - 1]
+      const file = last.files[0]
+      return file ? { diffId: last.id, fileId: file.id } : null
+    })
+  }, [diffs])
+
+  const selectedDiff: Diff | null = selected
+    ? (diffs.find((d) => d.id === selected.diffId) ?? null)
+    : null
+  const selectedFile: FileDiff | null =
+    selectedDiff && selected
+      ? (selectedDiff.files.find((f) => f.id === selected.fileId) ?? null)
+      : null
+  const fileComments = useMemo(
+    () =>
+      selected
+        ? comments.filter((c) => c.diffId === selected.diffId && c.fileId === selected.fileId)
+        : [],
+    [comments, selected],
+  )
+  const openComments = comments.filter((c) => !c.resolved).length
+  const fileCount = diffs.reduce((total, diff) => total + diff.files.length, 0)
+
+  const copyPrompt = async () => {
+    try {
+      const text = await client.prompt(group)
+      await navigator.clipboard.writeText(text)
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 1500)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    }
+  }
+
+  // The review is what anything waiting on sa is waiting for, so saying "I
+  // am done" is an explicit act rather than a guess from the last comment.
+  const summary = status?.groups.find((g) => g.name === group)
+  const reviewed = summary ? summary.reviewed : reviewedAt !== null
+  const hooks = summary?.hooks ?? 0
+
+  const submitReview = async (verdict: Verdict) => {
+    setSubmitting(true)
+    setError(null)
+    try {
+      await client.submitReview(group, reviewNote ?? '', verdict)
+      setReviewNote(null)
+      await reload()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  // Closing is the end of a review: the diffs, the comments and the hooks
+  // go, and the page is back to waiting for the next one.
+  const closeReview = async () => {
+    const open = comments.filter((c) => !c.resolved).length
+    const question =
+      open > 0
+        ? `Close this review? ${open} comment(s) are still open and will go with it.`
+        : 'Close this review? Its diffs and comments will go.'
+    if (!window.confirm(question)) return
+    setClosing(true)
+    setError(null)
+    try {
+      await client.closeReview(group)
+      await reload()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setClosing(false)
+    }
+  }
+
+  // The file list as one sequence, which is what "next file" means.
+  const flatFiles = useMemo(
+    () => diffs.flatMap((d) => d.files.map((f) => ({ diffId: d.id, fileId: f.id }))),
+    [diffs],
+  )
+
+  const stepFile = useCallback(
+    (by: number) => {
+      if (flatFiles.length === 0) return
+      const at = flatFiles.findIndex(
+        (f) => f.diffId === selected?.diffId && f.fileId === selected.fileId,
+      )
+      const next = flatFiles[Math.min(flatFiles.length - 1, Math.max(0, at + by))]
+      if (next) {
+        setSelected(next)
+        if (narrow) setPane('diff')
+      }
+    },
+    [flatFiles, selected, narrow],
+  )
+
+  // Comments are what a review is for, so stepping through them is stepping
+  // through the review rather than through the files: the next one may be
+  // in another file, and going there is the point.
+  const stepComment = useCallback(
+    (by: number) => {
+      const open = comments.filter((c) => !c.resolved)
+      if (open.length === 0) return
+      const at = open.findIndex((c) => c.diffId === selected?.diffId && c.fileId === selected.fileId)
+      const index = at < 0 ? (by > 0 ? 0 : open.length - 1) : at + by
+      const target = open[(index + open.length) % open.length]
+      if (!target) return
+      setSelected({ diffId: target.diffId, fileId: target.fileId })
+      if (narrow) setPane('diff')
+      window.setTimeout(() => {
+        document.querySelector('.comment')?.scrollIntoView({ block: 'center' })
+      }, 50)
+    },
+    [comments, selected, narrow],
+  )
+
+  // One place where every key is answered. Each is a single unmodified
+  // press, which only works because nothing fires while the reader is
+  // typing - a comment full of the letter "f" would otherwise fold the file
+  // away eleven times.
+  useEffect(() => {
+    const onKey = (ev: KeyboardEvent) => {
+      if (!plainKey(ev)) return
+      if (ev.key === 'Escape') {
+        setHelp(false)
+        setReviewNote(null)
+        return
+      }
+      if (typingInto(ev.target)) return
+      switch (ev.key) {
+        case 'j':
+          stepFile(1)
+          break
+        case 'k':
+          stepFile(-1)
+          break
+        case 'n':
+          stepComment(1)
+          break
+        case 'p':
+          stepComment(-1)
+          break
+        case '/':
+          focusSearch()
+          break
+        case 'f':
+          setFoldNudge((n) => n + 1)
+          break
+        case 'v':
+          setViewNudge((n) => n + 1)
+          break
+        case 's':
+          setSyncScroll((on) => !on)
+          break
+        case 'r':
+          if (!client.isStatic && diffs.length > 0) setReviewNote((note) => (note === null ? '' : null))
+          break
+        case '?':
+          setHelp((open) => !open)
+          break
+        default:
+          return
+      }
+      ev.preventDefault()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [stepFile, stepComment, focusSearch, diffs.length])
+
+  const selectFile = (diffId: string, fileId: string) => {
+    setSelected({ diffId, fileId })
+    // On a phone the file list covers the screen, so picking a file means
+    // "show me this diff".
+    if (narrow) setPane('diff')
+  }
+
+  const sidebar = (
+    <Sidebar
+      width={narrow ? null : sidebarWidth}
+      group={group}
+      diffs={diffs}
+      comments={comments}
+      status={status}
+      selected={selected}
+      onSelect={selectFile}
+      onChanged={() => void reload()}
+      query={query}
+      onQuery={setQuery}
+      searchRef={searchRef}
+    />
+  )
+
+  const diffPane =
+    selectedDiff && selectedFile ? (
+      <DiffView
+        // The server picks split or unified per file, and that choice is
+        // the initial state of the view; without a key React keeps the
+        // first file's state for every file after it.
+        key={selectedFile.id}
+        group={group}
+        diff={selectedDiff}
+        file={selectedFile}
+        comments={fileComments}
+        narrow={narrow}
+        onChanged={() => void reload()}
+        foldNudge={foldNudge}
+        viewNudge={viewNudge}
+      />
+    ) : (
+      <p className="empty">Select a file.</p>
+    )
+
+  const previewPane = (
+    <PreviewPane
+      group={group}
+      diffId={selectedDiff?.id ?? null}
+      file={selectedFile}
+      status={status}
+      narrow={narrow}
+      scrollTo={syncScroll ? scrollTo : null}
+      sync={syncScroll}
+      onSync={setSyncScroll}
+    />
+  )
+
+  const welcome = (
+    <div className="welcome">
+      <h1>{client.isStatic ? 'This page carries no diff' : 'Waiting for a diff'}</h1>
+      <p>Pipe one in — sa adds it to this page:</p>
+      <pre>
+        <code>
+          git diff | sa{group === 'default' ? '' : ` --target ${group}`}
+          {'\n'}diff -u old.md new.md | sa{group === 'default' ? '' : ` --target ${group}`}
+        </code>
+      </pre>
+      <p className="hint">
+        Comments you leave here are readable from the command line with{' '}
+        <code>sa comments{group === 'default' ? '' : ` -t ${group}`}</code>.
+      </p>
+    </div>
+  )
+
+  return (
+    <div className={`app${narrow ? ' narrow' : ''}`}>
+      <header className="topbar">
+        <span className="brand">sa</span>
+        <span className="group">{group}</span>
+        <span className="hint counts">
+          {diffs.length} diff(s) · {comments.length} comment(s)
+          {openComments > 0 ? ` · ${openComments} open` : ''}
+        </span>
+        {client.isStatic && (
+          <span
+            className="badge"
+            title={
+              'This page was written with `sa export`. The diff is frozen and ' +
+              'comments are kept in this browser.'
+            }
+          >
+            exported
+            {client.exportedAt && (
+              <span className="exported-at"> {new Date(client.exportedAt).toLocaleString()}</span>
+            )}
+          </span>
+        )}
+        <span className="spacer" />
+        <button className="ghost" onClick={() => void copyPrompt()} disabled={comments.length === 0}>
+          {copied ? 'Copied' : 'Copy prompt'}
+        </button>
+        {!client.isStatic && (
+          <button
+            className={reviewed ? 'ghost' : ''}
+            disabled={submitting || diffs.length === 0}
+            onClick={() => setReviewNote((note) => (note === null ? '' : null))}
+            title={
+              hooks > 0
+                ? `Submitting runs ${hooks} hook(s) on the sa server`
+                : 'Tell whoever is waiting that the review is done'
+            }
+          >
+            {reviewed ? verdictLabel(reviewVerdict) : 'Submit review'}
+          </button>
+        )}
+        <button
+          className="ghost"
+          onClick={() => setTheme(nextTheme(theme))}
+          title="Colours: follow the system, or pick one"
+        >
+          {themeLabel(theme)}
+        </button>
+        {!client.isStatic && diffs.length > 0 && (
+          <button
+            className="ghost danger"
+            disabled={closing}
+            onClick={() => void closeReview()}
+            title="Drop this review: its diffs, comments and hooks"
+          >
+            {closing ? 'Closing…' : 'Close'}
+          </button>
+        )}
+        {!narrow && (
+          <>
+            <label className="switch">
+              <input type="checkbox" checked={sidebarWidth > 0} onChange={toggleSidebar} />
+              Files
+            </label>
+            <label className="switch">
+              <input
+                type="checkbox"
+                checked={splitRatio > 0}
+                onChange={toggleDiff}
+                disabled={diffs.length === 0}
+              />
+              Diff
+            </label>
+            <label className="switch">
+              <input
+                type="checkbox"
+                checked={splitRatio < 1}
+                onChange={togglePreview}
+                disabled={diffs.length === 0}
+              />
+              Preview
+            </label>
+          </>
+        )}
+      </header>
+
+      {narrow && diffs.length > 0 && (
+        <nav className="tabs" aria-label="Panes">
+          <button
+            className={pane === 'files' ? 'active' : ''}
+            aria-pressed={pane === 'files'}
+            onClick={() => setPane('files')}
+          >
+            Files<span className="tab-count">{fileCount}</span>
+          </button>
+          <button
+            className={pane === 'diff' ? 'active' : ''}
+            aria-pressed={pane === 'diff'}
+            onClick={() => setPane('diff')}
+          >
+            Diff
+            {fileComments.length > 0 && <span className="tab-count">{fileComments.length}</span>}
+          </button>
+          <button
+            className={pane === 'preview' ? 'active' : ''}
+            aria-pressed={pane === 'preview'}
+            onClick={() => setPane('preview')}
+            disabled={!selectedFile?.isMarkdown}
+            title={selectedFile?.isMarkdown ? undefined : 'Only Markdown files have a preview'}
+          >
+            Preview
+          </button>
+        </nav>
+      )}
+
+      {reviewNote !== null && (
+        <div className="review-form">
+          <label className="field-label" htmlFor="sa-review-note">
+            Anything to say about the change as a whole? (optional)
+          </label>
+          <textarea
+            id="sa-review-note"
+            className="comment-input"
+            autoFocus
+            rows={3}
+            value={reviewNote}
+            placeholder="Looks good apart from the two comments"
+            onChange={(ev) => setReviewNote(ev.target.value)}
+            onKeyDown={(ev) => {
+              if (ev.key === 'Escape') setReviewNote(null)
+              if (ev.key === 'Enter' && (ev.metaKey || ev.ctrlKey)) void submitReview('commented')
+            }}
+          />
+          <div className="comment-actions">
+            {/* What the reviewer decided is a separate thing from what any
+                comment says, so it is asked here rather than counted. */}
+            <button
+              className="verdict approve"
+              disabled={submitting}
+              onClick={() => void submitReview('approved')}
+              title="The change can go ahead; comments are worth reading, not blocking"
+            >
+              Approve
+            </button>
+            <button
+              disabled={submitting}
+              onClick={() => void submitReview('commented')}
+              title="Say things without deciding either way"
+            >
+              {submitting ? 'Submitting…' : `Comment (${openComments} open)`}
+            </button>
+            <button
+              className="verdict changes"
+              disabled={submitting}
+              onClick={() => void submitReview('changes-requested')}
+              title="The change should not go ahead as it is"
+            >
+              Request changes
+            </button>
+            <button className="ghost" disabled={submitting} onClick={() => setReviewNote(null)}>
+              Cancel
+            </button>
+            <span className="hint">
+              {hooks > 0
+                ? `${hooks} hook(s) will run on the sa server`
+                : 'Anything waiting with `sa wait` carries on'}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {reviewed && reviewNote === null && (
+        <div className="review-banner">
+          Review submitted{reviewedAt ? ` ${new Date(reviewedAt).toLocaleString()}` : ''}. Send
+          another diff to start the next round.
+        </div>
+      )}
+
+      {error && <div className="error banner">{error}</div>}
+
+      {help && (
+        <div className="help-backdrop" onClick={() => setHelp(false)}>
+          <div
+            className="help"
+            role="dialog"
+            aria-label="Keyboard shortcuts"
+            onClick={(ev) => ev.stopPropagation()}
+          >
+            <h2>Keys</h2>
+            <dl>
+              {shortcuts.map((s) => (
+                <Fragment key={s.keys.join('+')}>
+                  <dt>
+                    {s.keys.map((k) => (
+                      <kbd key={k}>{k}</kbd>
+                    ))}
+                  </dt>
+                  <dd>{s.what}</dd>
+                </Fragment>
+              ))}
+            </dl>
+            <p className="hint">None of them fires while you are typing.</p>
+          </div>
+        </div>
+      )}
+
+      {narrow ? (
+        <div className="body">
+          {diffs.length === 0 ? (
+            <main className="content">{welcome}</main>
+          ) : pane === 'files' ? (
+            sidebar
+          ) : (
+            <main className="content">{pane === 'preview' ? previewPane : diffPane}</main>
+          )}
+        </div>
+      ) : (
+        <div className="body" ref={bodyRef}>
+          {sidebar}
+          <Divider
+            label="Resize the file list"
+            onDrag={resizeSidebar}
+            onReset={toggleSidebar}
+            onNudge={(direction) =>
+              setSidebarWidth((w) => Math.min(SIDEBAR_MAX, Math.max(0, w + direction * SIDEBAR_STEP)))
+            }
+          />
+          <main className="content">
+            {diffs.length === 0 ? (
+              welcome
+            ) : (
+              <SplitPane
+                ratio={splitRatio}
+                onRatioChange={setSplitRatio}
+                left={diffPane}
+                right={previewPane}
+                onLeftScroll={syncScroll ? setScrollTo : undefined}
+              />
+            )}
+          </main>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** staticGroupName reads the group an exported page was written for. */
+function staticGroupName(): string {
+  return window.__SA_DATA__?.group ?? 'default'
+}
+
+/** verdictLabel says what a finished review decided, on the button that
+ * used to say only "Reviewed". */
+function verdictLabel(verdict: Verdict | null): string {
+  switch (verdict) {
+    case 'approved':
+      return 'Approved'
+    case 'changes-requested':
+      return 'Changes requested'
+    default:
+      return 'Reviewed'
+  }
+}

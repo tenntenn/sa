@@ -1,0 +1,414 @@
+package diff_test
+
+import (
+	"fmt"
+	"strings"
+	"testing"
+
+	"github.com/tenntenn/sa/internal/diff"
+	"github.com/tenntenn/sa/internal/model"
+)
+
+func TestParseGitDiff(t *testing.T) {
+	src := `diff --git a/main.go b/main.go
+index 1234567..89abcde 100644
+--- a/main.go
++++ b/main.go
+@@ -1,5 +1,6 @@ func main() {
+ package main
+
+-import "fmt"
++import (
++	"fmt"
++)
+
+ func main() {
+`
+	files := diff.Parse(src)
+	if len(files) != 1 {
+		t.Fatalf("got %d files, want 1", len(files))
+	}
+	f := files[0]
+	if f.OldPath != "main.go" || f.NewPath != "main.go" {
+		t.Errorf("paths = %q, %q", f.OldPath, f.NewPath)
+	}
+	if f.Status != model.StatusModified {
+		t.Errorf("status = %q, want modified", f.Status)
+	}
+	if f.Additions != 3 || f.Deletions != 1 {
+		t.Errorf("additions/deletions = %d/%d, want 3/1", f.Additions, f.Deletions)
+	}
+	if f.ViewMode != model.ViewSplit {
+		t.Errorf("viewMode = %q, want split", f.ViewMode)
+	}
+	if len(f.Hunks) != 1 {
+		t.Fatalf("got %d hunks, want 1", len(f.Hunks))
+	}
+	h := f.Hunks[0]
+	if h.OldStart != 1 || h.OldLines != 5 || h.NewStart != 1 || h.NewLines != 6 {
+		t.Errorf("hunk range = %d,%d %d,%d", h.OldStart, h.OldLines, h.NewStart, h.NewLines)
+	}
+	if h.Section != "func main() {" {
+		t.Errorf("section = %q", h.Section)
+	}
+	// Line numbering: "package main" is old 1 / new 1, the added import block
+	// only has new numbers.
+	first := h.Lines[0]
+	if first.Kind != model.LineContext || first.OldNumber != 1 || first.NewNumber != 1 {
+		t.Errorf("first line = %+v", first)
+	}
+	var adds []model.Line
+	for _, l := range h.Lines {
+		if l.Kind == model.LineAdd {
+			adds = append(adds, l)
+		}
+	}
+	if len(adds) != 3 || adds[0].NewNumber != 3 || adds[0].OldNumber != 0 {
+		t.Errorf("added lines = %+v", adds)
+	}
+}
+
+func TestParseNewFileIsUnified(t *testing.T) {
+	src := `diff --git a/docs/spec.md b/docs/spec.md
+new file mode 100644
+index 0000000..e69de29
+--- /dev/null
++++ b/docs/spec.md
+@@ -0,0 +1,3 @@
++# Spec
++
++Hello.
+`
+	files := diff.Parse(src)
+	if len(files) != 1 {
+		t.Fatalf("got %d files, want 1", len(files))
+	}
+	f := files[0]
+	if f.Status != model.StatusAdded {
+		t.Errorf("status = %q, want added", f.Status)
+	}
+	if f.ViewMode != model.ViewUnified {
+		t.Errorf("viewMode = %q, want unified for a new file", f.ViewMode)
+	}
+	if f.OldPath != "" || f.NewPath != "docs/spec.md" {
+		t.Errorf("paths = %q, %q", f.OldPath, f.NewPath)
+	}
+	if !f.IsMarkdown {
+		t.Error("IsMarkdown = false, want true")
+	}
+	got, complete := diff.Reconstruct(f)
+	if !complete {
+		t.Error("Reconstruct: complete = false, want true for an added file")
+	}
+	if got != "# Spec\n\nHello.\n" {
+		t.Errorf("Reconstruct = %q", got)
+	}
+}
+
+func TestParseDeletedFile(t *testing.T) {
+	src := `diff --git a/old.txt b/old.txt
+deleted file mode 100644
+index e69de29..0000000
+--- a/old.txt
++++ /dev/null
+@@ -1,2 +0,0 @@
+-line1
+-line2
+`
+	files := diff.Parse(src)
+	f := files[0]
+	if f.Status != model.StatusDeleted {
+		t.Errorf("status = %q, want deleted", f.Status)
+	}
+	if f.NewPath != "" || f.OldPath != "old.txt" {
+		t.Errorf("paths = %q, %q", f.OldPath, f.NewPath)
+	}
+	if f.ViewMode != model.ViewUnified {
+		t.Errorf("viewMode = %q, want unified", f.ViewMode)
+	}
+	if f.Path() != "old.txt" {
+		t.Errorf("Path() = %q", f.Path())
+	}
+}
+
+func TestParseRename(t *testing.T) {
+	src := `diff --git a/a.txt b/b.txt
+similarity index 87%
+rename from a.txt
+rename to b.txt
+index 1234567..89abcde 100644
+--- a/a.txt
++++ b/b.txt
+@@ -1,2 +1,2 @@
+ keep
+-old
++new
+`
+	f := diff.Parse(src)[0]
+	if f.Status != model.StatusRenamed {
+		t.Errorf("status = %q, want renamed", f.Status)
+	}
+	if f.OldPath != "a.txt" || f.NewPath != "b.txt" {
+		t.Errorf("paths = %q, %q", f.OldPath, f.NewPath)
+	}
+}
+
+func TestParseBinaryAndMode(t *testing.T) {
+	src := `diff --git a/logo.png b/logo.png
+index 1234567..89abcde 100644
+Binary files a/logo.png and b/logo.png differ
+diff --git a/run.sh b/run.sh
+old mode 100644
+new mode 100755
+`
+	files := diff.Parse(src)
+	if len(files) != 2 {
+		t.Fatalf("got %d files, want 2", len(files))
+	}
+	if !files[0].IsBinary {
+		t.Error("logo.png: IsBinary = false, want true")
+	}
+	if files[0].ViewMode != model.ViewUnified {
+		t.Errorf("logo.png: viewMode = %q, want unified", files[0].ViewMode)
+	}
+	if files[1].Status != model.StatusMode {
+		t.Errorf("run.sh: status = %q, want mode", files[1].Status)
+	}
+	if files[1].OldMode != "100644" || files[1].NewMode != "100755" {
+		t.Errorf("run.sh: modes = %q, %q", files[1].OldMode, files[1].NewMode)
+	}
+}
+
+func TestParsePlainDiff(t *testing.T) {
+	// "diff -u old new" output: no git header, timestamps after a tab.
+	src := "--- old.txt\t2026-08-15 10:00:00.000000000 +0900\n" +
+		"+++ new.txt\t2026-08-15 10:00:01.000000000 +0900\n" +
+		"@@ -1,3 +1,3 @@\n" +
+		" a\n" +
+		"-b\n" +
+		"+B\n" +
+		" c\n"
+	files := diff.Parse(src)
+	if len(files) != 1 {
+		t.Fatalf("got %d files, want 1", len(files))
+	}
+	f := files[0]
+	if f.OldPath != "old.txt" || f.NewPath != "new.txt" {
+		t.Errorf("paths = %q, %q", f.OldPath, f.NewPath)
+	}
+	if f.Additions != 1 || f.Deletions != 1 {
+		t.Errorf("additions/deletions = %d/%d", f.Additions, f.Deletions)
+	}
+}
+
+func TestParseMultipleFiles(t *testing.T) {
+	src := `--- a/one.txt
++++ b/one.txt
+@@ -1 +1 @@
+-1
++one
+--- a/two.txt
++++ b/two.txt
+@@ -1 +1 @@
+-2
++two
+`
+	files := diff.Parse(src)
+	if len(files) != 2 {
+		t.Fatalf("got %d files, want 2", len(files))
+	}
+	if files[0].NewPath != "one.txt" || files[1].NewPath != "two.txt" {
+		t.Errorf("paths = %q, %q", files[0].NewPath, files[1].NewPath)
+	}
+	if files[0].ID == files[1].ID {
+		t.Error("file IDs collide")
+	}
+}
+
+func TestParseNoNewlineAtEOF(t *testing.T) {
+	src := `--- a/f.txt
++++ b/f.txt
+@@ -1 +1 @@
+-a
+\ No newline at end of file
++b
+\ No newline at end of file
+`
+	f := diff.Parse(src)[0]
+	lines := f.Hunks[0].Lines
+	if len(lines) != 2 {
+		t.Fatalf("got %d lines, want 2", len(lines))
+	}
+	if !lines[0].NoNewline || !lines[1].NoNewline {
+		t.Errorf("NoNewline flags = %v, %v", lines[0].NoNewline, lines[1].NoNewline)
+	}
+}
+
+func TestParsePathWithSpaces(t *testing.T) {
+	src := `diff --git a/my dir/my file.md b/my dir/my file.md
+index 1234567..89abcde 100644
+--- a/my dir/my file.md
++++ b/my dir/my file.md
+@@ -1 +1 @@
+-x
++y
+`
+	f := diff.Parse(src)[0]
+	if f.NewPath != "my dir/my file.md" {
+		t.Errorf("newPath = %q", f.NewPath)
+	}
+}
+
+func TestParseQuotedPath(t *testing.T) {
+	src := "diff --git \"a/\\346\\227\\245\\346\\234\\254\\350\\252\\236.md\" \"b/\\346\\227\\245\\346\\234\\254\\350\\252\\236.md\"\n" +
+		"new file mode 100644\n" +
+		"--- /dev/null\n" +
+		"+++ \"b/\\346\\227\\245\\346\\234\\254\\350\\252\\236.md\"\n" +
+		"@@ -0,0 +1 @@\n" +
+		"+hi\n"
+	f := diff.Parse(src)[0]
+	if f.NewPath != "日本語.md" {
+		t.Errorf("newPath = %q, want 日本語.md", f.NewPath)
+	}
+}
+
+func TestReconstructPartial(t *testing.T) {
+	src := `--- a/doc.md
++++ b/doc.md
+@@ -10,3 +10,3 @@
+ intro
+-old
++new
+`
+	f := diff.Parse(src)[0]
+	got, complete := diff.Reconstruct(f)
+	if complete {
+		t.Error("complete = true, want false for a partial hunk")
+	}
+	if !strings.Contains(got, "sa: 9 line(s) not included") {
+		t.Errorf("missing gap marker: %q", got)
+	}
+	if !strings.Contains(got, "new") || strings.Contains(got, "old") {
+		t.Errorf("reconstructed content = %q", got)
+	}
+}
+
+func TestIsMarkdown(t *testing.T) {
+	for _, tt := range []struct {
+		path string
+		want bool
+	}{
+		{"README.md", true},
+		{"docs/SPEC.MD", true},
+		{"a.mdx", true},
+		{"a.markdown", true},
+		{"main.go", false},
+		{"noext", false},
+	} {
+		if got := diff.IsMarkdown(tt.path); got != tt.want {
+			t.Errorf("IsMarkdown(%q) = %v, want %v", tt.path, got, tt.want)
+		}
+	}
+}
+
+func TestParseEmpty(t *testing.T) {
+	if files := diff.Parse(""); len(files) != 0 {
+		t.Errorf("got %d files, want 0", len(files))
+	}
+}
+
+// A rename with edits is one file, not two: the rename headers name it and
+// the "--- / +++" pair that follows belongs to the same entry.
+func TestParseRenameWithEditsIsOneFile(t *testing.T) {
+	src := `diff --git a/old.txt b/new.txt
+similarity index 80%
+rename from old.txt
+rename to new.txt
+index 1234567..89abcde 100644
+--- a/old.txt
++++ b/new.txt
+@@ -1,2 +1,2 @@
+ keep
+-was
++now
+`
+	files := diff.Parse(src)
+	if len(files) != 1 {
+		t.Fatalf("got %d file(s), want 1:\n%s", len(files), describe(files))
+	}
+	f := files[0]
+	if f.Status != model.StatusRenamed || f.OldPath != "old.txt" || f.NewPath != "new.txt" {
+		t.Errorf("file = %s %q -> %q", f.Status, f.OldPath, f.NewPath)
+	}
+	if len(f.Hunks) != 1 {
+		t.Fatalf("the edits went missing: %d hunk(s)", len(f.Hunks))
+	}
+	if f.Additions != 1 || f.Deletions != 1 {
+		t.Errorf("stats = +%d -%d", f.Additions, f.Deletions)
+	}
+}
+
+// A copy with edits has the same shape as a rename.
+func TestParseCopyWithEditsIsOneFile(t *testing.T) {
+	src := `diff --git a/src.txt b/copy.txt
+similarity index 90%
+copy from src.txt
+copy to copy.txt
+--- a/src.txt
++++ b/copy.txt
+@@ -1 +1 @@
+-old
++new
+`
+	files := diff.Parse(src)
+	if len(files) != 1 {
+		t.Fatalf("got %d file(s), want 1:\n%s", len(files), describe(files))
+	}
+	if files[0].Status != model.StatusCopied || files[0].NewPath != "copy.txt" || len(files[0].Hunks) != 1 {
+		t.Errorf("file = %+v", files[0])
+	}
+}
+
+// A plain diff of several files still splits on every "--- / +++" pair,
+// which is the only thing separating them.
+func TestParsePlainDiffStillSplitsOnHeaders(t *testing.T) {
+	src := `--- a.txt	2026-08-16 10:00:00
++++ a.txt	2026-08-16 10:01:00
+@@ -1 +1 @@
+-a
++A
+--- b.txt	2026-08-16 10:00:00
++++ b.txt	2026-08-16 10:01:00
+@@ -1 +1 @@
+-b
++B
+`
+	files := diff.Parse(src)
+	if len(files) != 2 {
+		t.Fatalf("got %d file(s), want 2:\n%s", len(files), describe(files))
+	}
+	if files[0].NewPath != "a.txt" || files[1].NewPath != "b.txt" {
+		t.Errorf("paths = %q, %q", files[0].NewPath, files[1].NewPath)
+	}
+}
+
+// "diff --combined" is longer than "diff --cc"; both name the file.
+func TestParseCombinedHeaderSpellings(t *testing.T) {
+	for _, header := range []string{"diff --cc merged.txt", "diff --combined merged.txt"} {
+		files := diff.Parse(header + `
+@@@ -1,1 -1,1 +1,1 @@@
+++merged
+`)
+		if len(files) != 1 || files[0].NewPath != "merged.txt" {
+			t.Errorf("%q gave %s", header, describe(files))
+		}
+	}
+}
+
+func describe(files []*model.File) string {
+	var b strings.Builder
+	for i, f := range files {
+		fmt.Fprintf(&b, "  [%d] %s %q -> %q, %d hunk(s)\n", i, f.Status, f.OldPath, f.NewPath, len(f.Hunks))
+	}
+	return b.String()
+}
