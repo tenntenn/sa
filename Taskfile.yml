@@ -1,0 +1,57 @@
+version: '3'
+
+vars:
+  GO: go
+  PNPM: pnpm
+
+tasks:
+  build:
+    desc: Builds the review UI and the sa binary.
+    deps: [web, bin]
+
+  web:
+    desc: Builds the review UI that gets embedded into the binary.
+    dir: web
+    cmds:
+      - "{{.PNPM}} install --frozen-lockfile"
+      - "{{.PNPM}} run build"
+
+  bin:
+    cmds:
+      - "{{.GO}} build ./..."
+
+  install:
+    deps: [web]
+    cmds:
+      - "{{.GO}} install ."
+
+  test:
+    cmds:
+      - "{{.GO}} test ./..."
+
+  lint:
+    cmds:
+      - "{{.GO}} vet ./..."
+      - "gofmt -l . | grep -v '^web/node_modules' && exit 1 || true"
+
+  dev:
+    desc: Runs the sa server in the foreground and the Vite dev server, which proxies /_ to it.
+    deps: [dev-server, dev-web]
+
+  dev-server:
+    internal: true
+    cmds:
+      - "{{.GO}} run . --foreground"
+
+  dev-web:
+    internal: true
+    dir: web
+    cmds:
+      - "{{.PNPM}} run dev"
+
+  clean:
+    desc: |
+      Leaves web/dist alone: its contents are committed and go:embed needs
+      them to build the binary. Run `task web` to regenerate them.
+    cmds:
+      - rm -rf web/node_modules

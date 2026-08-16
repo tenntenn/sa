@@ -512,10 +512,13 @@ is required to bind anywhere else.
 The UI is React + Vite, embedded into the binary with `go:embed`. The built
 assets are committed so that `go install` needs no Node.
 
+Tools are managed with [aqua](https://aquaproj.github.io/); run `aqua install`
+to get `task`.
+
 ```console
-$ make build     # pnpm build in web/, then go build
-$ make test      # go test ./...
-$ make dev       # sa in the foreground plus the Vite dev server
+$ task build     # pnpm build in web/, then go build
+$ task test      # go test ./...
+$ task dev       # sa in the foreground plus the Vite dev server
 ```
 
 ## License
