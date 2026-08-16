@@ -8,7 +8,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/tenntenn/sa/internal/client"
-	"github.com/tenntenn/sa/internal/server"
 )
 
 var (
@@ -37,7 +36,7 @@ human has written them:
 
 func init() {
 	f := commentsCmd.Flags()
-	f.StringVarP(&target, "target", "t", server.DefaultGroup, "Group name")
+	f.StringVarP(&target, "target", "t", "", "Group name (default: the checkout the command runs in)")
 	f.IntVarP(&port, "port", "p", DefaultPort, "Server port")
 	f.StringVarP(&bind, "bind", "b", "localhost", "Bind address")
 	f.StringVar(&commentsFormat, "format", "prompt", "Output format: prompt, markdown or json")
@@ -48,13 +47,13 @@ func init() {
 
 func runComments(cmd *cobra.Command, _ []string) error {
 	ctx := cmd.Context()
-	group, err := server.ValidateGroupName(target)
-	if err != nil {
-		return err
-	}
 	c := client.New(addr(), 5*time.Second)
 	if _, err := c.Status(ctx); err != nil {
 		return fmt.Errorf("no sa server found on %s", c.Addr)
+	}
+	group, err := resolveGroup(ctx, c, target)
+	if err != nil {
+		return err
 	}
 
 	if commentsClear {

@@ -44,7 +44,7 @@ the browser and "Copy prompt" produces the same text as ` + "`sa comments`" + `.
 
 func init() {
 	f := exportCmd.Flags()
-	f.StringVarP(&target, "target", "t", server.DefaultGroup, "Group name")
+	f.StringVarP(&target, "target", "t", "", "Group name (default: the checkout the command runs in)")
 	f.IntVarP(&port, "port", "p", DefaultPort, "Port of the sa server to read the group from")
 	f.StringVarP(&bind, "bind", "b", "localhost", "Bind address of the sa server")
 	f.StringVar(&title, "title", "", "Title of the diff read from stdin")
@@ -54,9 +54,11 @@ func init() {
 
 func runExport(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
-	group, err := server.ValidateGroupName(target)
-	if err != nil {
-		return err
+	group := explicitTarget(target)
+	if group != "" {
+		if _, err := server.ValidateGroupName(group); err != nil {
+			return err
+		}
 	}
 
 	content, err := readStdin()
@@ -77,6 +79,9 @@ func runExport(cmd *cobra.Command, args []string) error {
 		if name == "" {
 			name = "diff 1"
 		}
+		if group == "" {
+			group = server.DefaultGroup
+		}
 		g = &model.Group{
 			Name: group,
 			Diffs: []*model.Diff{{
@@ -92,6 +97,10 @@ func runExport(cmd *cobra.Command, args []string) error {
 		c := client.New(addr(), 10*time.Second)
 		if _, err := c.Status(ctx); err != nil {
 			return fmt.Errorf("no diff on stdin and no sa server on %s", c.Addr)
+		}
+		group, err = resolveGroup(ctx, c, group)
+		if err != nil {
+			return err
 		}
 		g, err = c.Group(ctx, group)
 		if err != nil {

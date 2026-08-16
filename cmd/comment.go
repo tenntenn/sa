@@ -72,7 +72,7 @@ browser, with ` + "`sa comments`" + `.`,
 
 func init() {
 	f := commentCmd.Flags()
-	f.StringVarP(&target, "target", "t", server.DefaultGroup, "Group name")
+	f.StringVarP(&target, "target", "t", "", "Group name (default: the checkout the command runs in)")
 	f.IntVarP(&port, "port", "p", DefaultPort, "Server port")
 	f.StringVarP(&bind, "bind", "b", "localhost", "Bind address")
 	f.StringVarP(&commentBody, "message", "m", "", "Comment body")
@@ -88,13 +88,13 @@ func init() {
 
 func runComment(cmd *cobra.Command, args []string) error {
 	ctx := cmd.Context()
-	group, err := server.ValidateGroupName(target)
-	if err != nil {
-		return err
-	}
 	c := client.New(addr(), 10*time.Second)
 	if _, err := c.Status(ctx); err != nil {
 		return fmt.Errorf("no sa server found on %s", c.Addr)
+	}
+	group, err := resolveGroup(ctx, c, target)
+	if err != nil {
+		return err
 	}
 
 	var requests []server.AddCommentRequest

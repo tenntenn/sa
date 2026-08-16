@@ -1,13 +1,18 @@
 package server
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"sync"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/tenntenn/sa/internal/model"
 )
@@ -157,6 +162,8 @@ type GroupSummary struct {
 	// Reviewed is false once a diff arrives after the last submission.
 	Reviewed bool `json:"reviewed"`
 	Hooks    int  `json:"hooks"`
+	// Root is where the diffs of this group live, when sa worked it out.
+	Root string `json:"root,omitempty"`
 }
 
 // Summary returns a summary of every group.
@@ -172,6 +179,7 @@ func (s *Store) Summary(baseURL string) []GroupSummary {
 			ReviewedAt: g.ReviewedAt,
 			Reviewed:   g.Reviewed(),
 			Hooks:      len(g.Hooks),
+			Root:       g.Root,
 		}
 		for _, d := range g.Diffs {
 			sum.Files += len(d.Files)
@@ -211,11 +219,14 @@ func (s *Store) Group(name string) (*model.Group, bool) {
 }
 
 // AddDiff stores a parsed diff in a group and returns it with its ID filled
-// in.
-func (s *Store) AddDiff(group string, d *model.Diff) *model.Diff {
+// in. root, when set, records where the diffs of the group live.
+func (s *Store) AddDiff(group, root string, d *model.Diff) *model.Diff {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	g := s.group(group, true)
+	if root != "" && g.Root == "" {
+		g.Root = root
+	}
 	d.ID = s.nextID("d")
 	if d.CreatedAt.IsZero() {
 		d.CreatedAt = time.Now()
@@ -297,6 +308,69 @@ func (s *Store) FileContext(group, diffID, fileID string) (*model.Diff, *model.F
 		return nil, nil, false
 	}
 	return clone(d), clone(f), true
+}
+
+// GroupForRoot returns the name of the group holding the diffs rooted at
+// root, and whether one is there yet.
+func (s *Store) GroupForRoot(root string) (string, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, g := range s.groups {
+		if g.Root != "" && g.Root == root {
+			return g.Name, true
+		}
+	}
+	return "", false
+}
+
+// NameForRoot picks the group name a root should use: the name of its
+// directory, and a tag on the end when another root already answers to it.
+func (s *Store) NameForRoot(root string) string {
+	base := sanitizeGroupName(filepath.Base(root))
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, g := range s.groups {
+		if g.Name != base {
+			continue
+		}
+		if g.Root == "" || g.Root == root {
+			return base
+		}
+		// Two directories of the same name, in different places: the second
+		// one gets a tag so that the reviews stay apart.
+		return base + "-" + shortTag(root)
+	}
+	return base
+}
+
+// sanitizeGroupName turns a directory name into something a group name and a
+// URL path can both carry.
+func sanitizeGroupName(base string) string {
+	var b strings.Builder
+	for _, r := range base {
+		switch {
+		case r < utf8.RuneSelf && (unicode.IsLetter(r) || unicode.IsDigit(r)):
+			b.WriteRune(r)
+		case r == '-' || r == '_' || r == '.':
+			b.WriteRune(r)
+		default:
+			b.WriteRune('-')
+		}
+	}
+	name := strings.Trim(b.String(), "-._")
+	if len(name) > 48 {
+		name = strings.Trim(name[:48], "-._")
+	}
+	if name == "" {
+		return DefaultGroup
+	}
+	return name
+}
+
+// shortTag is a stable tag for a path.
+func shortTag(root string) string {
+	sum := sha256.Sum256([]byte(root))
+	return hex.EncodeToString(sum[:])[:4]
 }
 
 // SubmitReview records that the human is done looking, which is the event

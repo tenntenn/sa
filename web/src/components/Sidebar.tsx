@@ -86,7 +86,11 @@ export function Sidebar({
           <ul>
             {status.groups.map((g) => (
               <li key={g.name}>
-                <a className={g.name === group ? 'active' : ''} href={g.url}>
+                <a
+                  className={g.name === group ? 'active' : ''}
+                  href={g.url}
+                  title={g.root ?? undefined}
+                >
                   {g.name}
                   <span className="hint">
                     {g.diffs} diff(s){g.unresolved > 0 ? `, ${g.unresolved} open` : ''}

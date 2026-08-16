@@ -42,20 +42,25 @@ https://github.com/k1LoW/mo/releases).
 
 ### 1. Send the diff
 
-Pipe the diff into `sa` and use `--target` to name the review, so several
-reviews can be open at once without mixing their comments:
+Pipe the diff into `sa`:
 
 ```
-git diff | sa --target <topic>
+git diff | sa
 ```
+
+sa gives every checkout a review of its own — it finds where the diff belongs
+by looking for the files it names — so working in two worktrees at once needs
+nothing from you. Add `--target <topic>` when several reviews of the *same*
+checkout should stay apart (one per task, say); use the same `--target` for
+every later command of that review.
 
 Other ways to produce the same diff text:
 
 ```
-git diff HEAD~1 | sa --target <topic>     # a specific range
-git diff --cached | sa --target <topic>   # staged changes
-diff -u old.txt new.txt | sa --target <topic>
-cat change.patch | sa --target <topic>
+git diff HEAD~1 | sa                      # a specific range
+git diff --cached | sa                    # staged changes
+diff -u old.txt new.txt | sa
+cat change.patch | sa
 ```
 
 sa prints the review URL and returns immediately; the server keeps running in
@@ -193,8 +198,10 @@ artifact).
 | `... \| sa export <file>` | Write the review as one self-contained HTML page |
 | `... \| sa export --fragment <file>` | The same, body only, for embedding |
 
-`--port` (default 6280) selects the server; use it only if the user runs sa
-on a non-default port.
+`--target` defaults to the checkout the command runs in, so the commands of
+one review need no flag as long as they run in the same tree. `--port`
+(default 6280) selects the server; use it only if the user runs sa on a
+non-default port.
 
 ## Notes
 

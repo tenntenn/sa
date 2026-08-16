@@ -244,7 +244,11 @@ func (c *Comment) MarshalJSON() ([]byte, error) {
 // Group is a named collection of diffs and their review comments, served
 // under its own URL path.
 type Group struct {
-	Name     string     `json:"name"`
+	Name string `json:"name"`
+	// Root is the directory the diffs of this group are rooted at, when sa
+	// worked it out by itself. It is what keeps two checkouts of the same
+	// project - two worktrees, a clone next door - in separate groups.
+	Root     string     `json:"root,omitempty"`
 	Diffs    []*Diff    `json:"diffs"`
 	Comments []*Comment `json:"comments"`
 	// ReviewedAt is when the human last said they were done. It is what

@@ -71,8 +71,16 @@ Single server, growing session:
   $ git diff --cached | sa        # adds another diff to the same page
 
 Groups:
-  --target (-t) puts diffs into a named group with its own URL and its own
-  review comments.
+  Every checkout gets a review of its own. sa works out where a diff belongs
+  by looking for the files it names, starting at the directory it was sent
+  from, so two worktrees of one project - or a subdirectory of one checkout -
+  never review each other's diffs.
+
+  $ cd ~/src/app        && git diff | sa   # http://localhost:6280/app
+  $ cd ~/src/app-hotfix && git diff | sa   # http://localhost:6280/app-hotfix
+
+  --target (-t) names a group instead, for reviews that are about a topic
+  rather than a checkout; SA_TARGET does the same for a whole shell.
 
   $ git diff | sa --target api    # http://localhost:6280/api
 
@@ -134,7 +142,7 @@ func Execute() {
 
 func init() {
 	f := rootCmd.Flags()
-	f.StringVarP(&target, "target", "t", server.DefaultGroup, "Group name the diff is added to")
+	f.StringVarP(&target, "target", "t", "", "Group name (default: the checkout the command runs in)")
 	f.IntVarP(&port, "port", "p", DefaultPort, "Server port")
 	f.StringVarP(&bind, "bind", "b", "localhost", "Bind address")
 	f.StringVar(&title, "title", "", "Title of the diff (defaults to a generated name)")
@@ -171,9 +179,11 @@ func moRunner() *mo.Runner {
 
 func run(cmd *cobra.Command, _ []string) error {
 	ctx := cmd.Context()
-	group, err := server.ValidateGroupName(target)
-	if err != nil {
-		return err
+	named := explicitTarget(target)
+	if named != "" {
+		if _, err := server.ValidateGroupName(named); err != nil {
+			return err
+		}
 	}
 
 	switch {
@@ -186,7 +196,7 @@ func run(cmd *cobra.Command, _ []string) error {
 	case doRestart:
 		return runRestart(ctx)
 	case doClear:
-		return runClear(ctx, group)
+		return runClear(ctx, named)
 	}
 
 	content, err := readStdin()
@@ -200,13 +210,12 @@ func run(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	if err := registerHooks(ctx, c, group); err != nil {
-		return err
-	}
-
-	out := serveOutput{URL: server.GroupURL(c.BaseURL(), group), Group: group}
+	// Without an explicit --target the server places the diff itself, with
+	// the checkout its paths belong to.
+	group := named
+	out := serveOutput{Group: group}
 	if content != "" {
-		res, err := c.AddDiff(ctx, group, server.AddDiffRequest{
+		res, err := c.AddDiff(ctx, named, server.AddDiffRequest{
 			Title:   title,
 			BaseDir: workingDir(),
 			Content: content,
@@ -214,8 +223,21 @@ func run(cmd *cobra.Command, _ []string) error {
 		if err != nil {
 			return err
 		}
+		group = res.Group
+		out.Group = res.Group
 		out.URL = res.URL
 		out.Diff = summarize(res)
+	} else {
+		group, err = resolveGroup(ctx, c, named)
+		if err != nil {
+			return err
+		}
+		out.Group = group
+		out.URL = server.GroupURL(c.BaseURL(), group)
+	}
+
+	if err := registerHooks(ctx, c, group); err != nil {
+		return err
 	}
 	if status != nil && !status.MoAvailable && content != "" && out.Diff != nil && out.Diff.MarkdownFiles > 0 {
 		fmt.Fprintf(os.Stderr, "sa: Markdown preview needs mo: %s\n", mo.InstallHint)
@@ -279,10 +301,25 @@ func runStatus(ctx context.Context) error {
 		fmt.Printf("  mo preview: unavailable (%s)\n", st.MoError)
 	}
 	for _, g := range st.Groups {
-		fmt.Printf("  %-16s %s  %d diff(s), %d file(s), %d comment(s), %d open\n",
-			g.Name, g.URL, g.Diffs, g.Files, g.Comments, g.Unresolved)
+		fmt.Printf("  %-16s %s  %d diff(s), %d file(s), %d comment(s), %d open%s\n",
+			g.Name, g.URL, g.Diffs, g.Files, g.Comments, g.Unresolved, reviewState(g))
+		if g.Root != "" {
+			fmt.Printf("  %-16s %s\n", "", g.Root)
+		}
 	}
 	return nil
+}
+
+// reviewState says whether a group is waiting for a review or done with one.
+func reviewState(g server.GroupSummary) string {
+	switch {
+	case g.Reviewed:
+		return ", reviewed"
+	case g.Hooks > 0:
+		return fmt.Sprintf(", %d hook(s) waiting", g.Hooks)
+	default:
+		return ""
+	}
 }
 
 func runShutdown(ctx context.Context) error {
@@ -323,10 +360,14 @@ func runRestart(ctx context.Context) error {
 	return nil
 }
 
-func runClear(ctx context.Context, group string) error {
+func runClear(ctx context.Context, named string) error {
 	c := client.New(addr(), 2*time.Second)
 	if _, err := c.Status(ctx); err != nil {
 		return fmt.Errorf("no sa server found on %s", c.Addr)
+	}
+	group, err := resolveGroup(ctx, c, named)
+	if err != nil {
+		return err
 	}
 	if err := c.DeleteGroup(ctx, group); err != nil {
 		return err
