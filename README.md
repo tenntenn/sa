@@ -104,7 +104,9 @@ $ sa comments -t default   # the flag still wins
 - Each round of a review is a group in the file list. Click its heading to
   shut it — the heading keeps saying how many files and how many open
   comments are inside — or switch the list to **tabs** to see one round at a
-  time. Filtering by path looks through every round either way.
+  time. Filtering by path searches the tabs too: a round with nothing
+  matching drops out of the strip, the rest say how many paths they hold,
+  and the search never takes you out of the layout you chose.
 - Every pane is resizable and can be minimised away: drag the edge between
   two panes, double click it to reset (or to put the file list away), or use
   the **Files**, **Diff** and **Preview** switches in the header. Dragging an

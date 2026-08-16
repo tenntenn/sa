@@ -80,20 +80,32 @@ export function Sidebar({
   const total = diffs.reduce((n, d) => n + d.files.length, 0)
   const found = diffs.reduce((n, d) => n + shown(d).length, 0)
 
+  const searching = query !== ''
+
+  // A search is about the whole review, not about one round of it, so the
+  // tabs are searched too: a round with nothing matching drops out of the
+  // strip, and its count says how much it holds. Losing the tabs during a
+  // search - which is what flattening them into a list did - takes the
+  // reader out of the layout they chose the moment they look for
+  // something.
+  const tabbed = diffs.filter((d) => !searching || shown(d).length > 0)
+
   // The tab in front is the one holding the selected file, so picking a
   // file from anywhere - a keyboard step, a comment - brings its round
   // forward rather than leaving the reader on a tab that shows nothing.
-  const activeTab = diffs.find((d) => d.id === selected?.diffId)?.id ?? tab ?? diffs[0]?.id ?? null
+  // When a search empties the current tab, the first one with a match
+  // takes over, since a tab strip with nothing behind it is a dead end.
+  const preferred = diffs.find((d) => d.id === selected?.diffId)?.id ?? tab ?? diffs[0]?.id ?? null
+  const activeTab =
+    tabbed.some((d) => d.id === preferred) ? preferred : (tabbed[0]?.id ?? null)
 
-  // A search is about the whole review, not about one round, so it opens
-  // everything it matched.
-  const searching = query !== ''
   const visible = (diff: Diff): boolean => {
     if (shown(diff).length === 0) return false
-    if (searching) return true
     if (layout === 'tabs') return diff.id === activeTab
     return true
   }
+  // A search opens every round it matched: a match hidden inside a shut
+  // group is a match nobody sees.
   const isShut = (diff: Diff): boolean =>
     layout === 'list' && !searching && shutGroups.has(diff.id)
 
@@ -167,9 +179,9 @@ export function Sidebar({
         </div>
       )}
 
-      {layout === 'tabs' && !searching && diffs.length > 1 && (
+      {layout === 'tabs' && diffs.length > 1 && (
         <div className="diff-tabs" role="tablist">
-          {diffs.map((diff) => (
+          {tabbed.map((diff) => (
             <button
               key={diff.id}
               role="tab"
@@ -183,6 +195,11 @@ export function Sidebar({
               }}
             >
               {diff.title}
+              {searching && tabbed.length > 1 && (
+                <span className="hint" title="paths matching in this round">
+                  {shown(diff).length}
+                </span>
+              )}
               {groupComments(diff) > 0 && <span className="badge sm warn">{groupComments(diff)}</span>}
               {!client.isStatic && diff.id === activeTab && (
                 <span
@@ -202,12 +219,12 @@ export function Sidebar({
         </div>
       )}
 
-      {query !== '' && found === 0 && <p className="empty">No path contains that.</p>}
+      {searching && found === 0 && <p className="empty">No path contains that.</p>}
 
       {diffs.map((diff) => (
         <div className="diff-group" key={diff.id} hidden={!visible(diff)}>
-          <div className="diff-group-header" hidden={layout === 'tabs' && !searching}>
-            {layout === 'list' && !searching ? (
+          <div className="diff-group-header" hidden={layout === 'tabs'}>
+            {layout === 'list' ? (
               <button
                 className="diff-group-title as-button"
                 title={new Date(diff.createdAt).toLocaleString()}

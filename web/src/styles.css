@@ -1144,6 +1144,12 @@ a {
   flex-shrink: 0;
 }
 
+/* An explicit display: in this file beats the browser's own rule for the
+   hidden attribute, so anything marked hidden says so once, here. */
+[hidden] {
+  display: none !important;
+}
+
 /* A round can be shut, so its heading is a button; and the whole list can
    become tabs, which shows one round at a time. */
 .diff-group-title.as-button {
