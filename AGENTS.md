@@ -23,8 +23,9 @@ $ git diff | sa export --target <topic> review.html   # a page that needs no ser
 
 ## Working on sa
 
-- Build: `make build` (runs `pnpm build` in `web/`, then `go build`).
-- Test: `make test`.
+- Build: `task build` (runs `pnpm build` in `web/`, then `go build`).
+- Test: `task test`.
+- Tools are managed with [aqua](https://aquaproj.github.io/); run `aqua install` to get `task`.
 - The built UI in `web/dist` is committed on purpose, so `go install` works
   without Node. Rebuild it whenever `web/src` changes.
 - sa must not shell out to git: diffs only ever come from stdin.
