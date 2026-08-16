@@ -159,6 +159,11 @@ type Comment struct {
 	// it as a fenced "suggestion" block, which is what makes it travel
 	// through a copied prompt unchanged.
 	Body string `json:"body"`
+	// Question marks a comment that wants an answer rather than a change.
+	// The two are different requests and a reader cannot always tell them
+	// apart from the prose, so whoever writes the comment says which it is
+	// and nothing has to guess.
+	Question bool `json:"question,omitempty"`
 	// Snippet is the reviewed code, kept so that the comment stays
 	// meaningful once it is exported as a prompt.
 	Snippet   string    `json:"snippet"`

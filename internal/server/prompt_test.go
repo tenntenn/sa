@@ -65,3 +65,39 @@ func TestPromptSaysNothingBeforeSubmission(t *testing.T) {
 		t.Errorf("prompt claims a verdict before one was given:\n%s", got)
 	}
 }
+
+// A question and a change request are different asks, and the prose does
+// not always separate them. The prompt has to, or the agent rewrites code
+// that only needed an explanation.
+func TestPromptSeparatesQuestionsFromChanges(t *testing.T) {
+	g := &model.Group{
+		Name:       "api",
+		ReviewedAt: time.Now(),
+		Comments: []*model.Comment{
+			{Path: "main.go", Side: "new", StartLine: 4, EndLine: 4,
+				Body: "Should this be a 404?", Question: true},
+			{Path: "main.go", Side: "new", StartLine: 9, EndLine: 9,
+				Body: "rename this"},
+		},
+	}
+	got := server.Prompt(g, server.PromptOptions{})
+	for _, want := range []string{
+		"2 comment(s) to address, 1 of them a question",
+		"This one is a question: answer it.",
+		"asking for an answer, not for a change",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("prompt does not say %q:\n%s", want, got)
+		}
+	}
+}
+
+// Nothing about questions appears when none was asked.
+func TestPromptSaysNothingAboutQuestionsWhenThereAreNone(t *testing.T) {
+	g := &model.Group{Name: "api", ReviewedAt: time.Now(), Comments: []*model.Comment{
+		{Path: "main.go", Side: "new", StartLine: 4, EndLine: 4, Body: "rename this"},
+	}}
+	if got := server.Prompt(g, server.PromptOptions{}); strings.Contains(got, "question") {
+		t.Errorf("prompt talks about questions when none was asked:\n%s", got)
+	}
+}

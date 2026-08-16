@@ -122,6 +122,7 @@ function CommentItem({
         {!editing && suggestions(comment.body).length > 0 && (
           <span className="badge">suggestion</span>
         )}
+        {comment.question && <span className="badge question">question</span>}
         {comment.resolved && <span className="badge">resolved</span>}
       </div>
 
@@ -279,7 +280,7 @@ function SuggestButton({
 }
 
 interface FormProps {
-  onSubmit: (body: string) => Promise<void>
+  onSubmit: (body: string, question: boolean) => Promise<void>
   onCancel: () => void
   label: string
   /** seed is the current text of the selected lines, what a suggestion
@@ -294,6 +295,10 @@ interface FormProps {
 /** CommentForm writes a new comment, suggestion blocks included. */
 export function CommentForm({ onSubmit, onCancel, label, seed, canSuggest, hint }: FormProps) {
   const [body, setBody] = useState('')
+  // Asking a question and asking for a change are different requests, and
+  // the prose does not always tell them apart - "should this be a 404?" can
+  // be either. So the writer says which it is.
+  const [question, setQuestion] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const editor = useRef<HTMLTextAreaElement>(null)
@@ -303,8 +308,9 @@ export function CommentForm({ onSubmit, onCancel, label, seed, canSuggest, hint 
     setBusy(true)
     setError(null)
     try {
-      await onSubmit(body)
+      await onSubmit(body, question)
       setBody('')
+      setQuestion(false)
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
@@ -328,11 +334,20 @@ export function CommentForm({ onSubmit, onCancel, label, seed, canSuggest, hint 
       />
       <div className="comment-actions">
         <button disabled={busy || body.trim() === ''} onClick={() => void submit()}>
-          Comment
+          {question ? 'Ask' : 'Comment'}
         </button>
         {canSuggest && (
           <SuggestButton editorRef={editor} seed={seed} disabled={busy} onInsert={setBody} />
         )}
+        <label className="switch" title="It wants an answer, not a change">
+          <input
+            type="checkbox"
+            checked={question}
+            disabled={busy}
+            onChange={(ev) => setQuestion(ev.target.checked)}
+          />
+          Question
+        </label>
         <button className="ghost" disabled={busy} onClick={onCancel}>
           Cancel
         </button>

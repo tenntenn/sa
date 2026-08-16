@@ -45,15 +45,17 @@ type Record struct {
 // Comment is what a record keeps of a review comment: enough to see the
 // pattern, including what was said, which is where the pattern lives.
 type Comment struct {
-	Path        string    `json:"path"`
-	Author      string    `json:"author,omitempty"`
-	Side        string    `json:"side"`
-	StartLine   int       `json:"startLine"`
-	EndLine     int       `json:"endLine"`
-	Body        string    `json:"body"`
-	Suggestions []string  `json:"suggestions,omitempty"`
-	Resolved    bool      `json:"resolved"`
-	CreatedAt   time.Time `json:"createdAt"`
+	Path        string   `json:"path"`
+	Author      string   `json:"author,omitempty"`
+	Side        string   `json:"side"`
+	StartLine   int      `json:"startLine"`
+	EndLine     int      `json:"endLine"`
+	Body        string   `json:"body"`
+	Suggestions []string `json:"suggestions,omitempty"`
+	// Question marks a comment that wanted an answer, not a change.
+	Question  bool      `json:"question,omitempty"`
+	Resolved  bool      `json:"resolved"`
+	CreatedAt time.Time `json:"createdAt"`
 }
 
 // Wait is how long the change waited for its review.
@@ -98,6 +100,7 @@ func FromGroup(g *model.Group) Record {
 			EndLine:     c.EndLine,
 			Body:        c.Body,
 			Suggestions: model.Suggestions(c.Body),
+			Question:    c.Question,
 			Resolved:    c.Resolved,
 			CreatedAt:   c.CreatedAt,
 		})

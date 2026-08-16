@@ -67,6 +67,8 @@ export interface Comment {
   snippet: string
   /** suggestions are the replacement blocks the server parsed out of body. */
   suggestions?: string[]
+  /** question marks a comment that wants an answer, not a change. */
+  question?: boolean
   resolved: boolean
   createdAt: string
   updatedAt: string

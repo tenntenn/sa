@@ -184,6 +184,7 @@ function createStaticClient(data: StaticPayload): SaClient {
         body: comment.body,
         snippet: comment.snippet,
         suggestions: suggestions(comment.body),
+        question: comment.question ?? false,
         resolved: false,
         createdAt: now,
         updatedAt: now,
@@ -198,6 +199,7 @@ function createStaticClient(data: StaticPayload): SaClient {
                 ...c,
                 body: patch.body ?? c.body,
                 suggestions: suggestions(patch.body ?? c.body),
+                question: patch.question ?? c.question,
                 resolved: patch.resolved ?? c.resolved,
                 updatedAt: new Date().toISOString(),
               }

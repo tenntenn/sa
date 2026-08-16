@@ -13,6 +13,10 @@ interface Props {
   /** narrow is set on a phone, where side by side does not fit. */
   narrow?: boolean
   onChanged: () => void
+  /** foldNudge and viewNudge change whenever a key asks for a fold or a
+   * change of view. Their value means nothing; the change is the message. */
+  foldNudge?: number
+  viewNudge?: number
 }
 
 type Side = 'new' | 'old'
@@ -47,7 +51,16 @@ function marker(kind: Line['kind']): string {
   }
 }
 
-export function DiffView({ group, diff, file, comments, narrow = false, onChanged }: Props) {
+export function DiffView({
+  group,
+  diff,
+  file,
+  comments,
+  narrow = false,
+  onChanged,
+  foldNudge = 0,
+  viewNudge = 0,
+}: Props) {
   // A new or deleted file has only one side, so side by side makes no sense
   // for it and the toggle stays locked on unified. A narrow screen has no
   // room for two columns either.
@@ -133,13 +146,26 @@ export function DiffView({ group, diff, file, comments, narrow = false, onChange
     pick(side, line, extend)
   }
 
+  const firstNudge = useRef(true)
+  useEffect(() => {
+    if (firstNudge.current) return
+    setShut((current) => !(current ?? Boolean(file.folded)))
+  }, [foldNudge])
+  useEffect(() => {
+    if (firstNudge.current) return
+    if (!locked) setViewMode((m) => (m === 'split' ? 'unified' : 'split'))
+  }, [viewNudge, locked])
+  useEffect(() => {
+    firstNudge.current = false
+  }, [])
+
   // Dragging across the gutter grows the range under the pointer.
   const dragOver = (side: Side, line: number) => {
     if (!dragging.current) return
     extendTo(side, line)
   }
 
-  const submitComment = async (body: string) => {
+  const submitComment = async (body: string, question: boolean) => {
     if (!selection) return
     await client.addComment(group, {
       diffId: diff.id,
@@ -149,6 +175,7 @@ export function DiffView({ group, diff, file, comments, narrow = false, onChange
       startLine: selection.start,
       endLine: selection.end,
       body,
+      question,
       snippet: snippetFor(file, selection),
     })
     setSelection(null)

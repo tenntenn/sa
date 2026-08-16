@@ -17,7 +17,10 @@ export function buildPrompt(
     lines.push('No open review comments.')
     return lines.join('\n') + '\n'
   }
-  lines.push(`${open.length} comment(s) to address.`)
+  const questions = open.filter((c) => c.question).length
+  lines.push(
+    `${open.length} comment(s) to address${questions > 0 ? `, ${questions} of them a question` : ''}.`,
+  )
 
   const titles = new Map(diffs.map((d) => [d.id, d.title]))
   open.forEach((c, i) => {
@@ -25,6 +28,7 @@ export function buildPrompt(
     const title = titles.get(c.diffId)
     if (title) lines.push('', `Diff: ${title}`)
     if (c.author) lines.push('', `From: ${c.author}`)
+    if (c.question) lines.push('', 'This one is a question: answer it.')
     if (c.resolved) lines.push('', 'Status: resolved')
     const snippet = c.snippet.replace(/\n+$/, '')
     if (snippet) {
@@ -51,6 +55,15 @@ export function buildPrompt(
     'Address every comment above. A suggestion block replaces the lines it names, verbatim. ' +
       'When a comment is not worth acting on, say why instead of changing the code.',
   )
+  if (questions > 0) {
+    lines.push(
+      '',
+      'A comment marked as a question is asking for an answer, not for a change. Answer it in ' +
+        'your reply, in words, and change the code only if your own answer says it should ' +
+        'change. Leaving a question unanswered is the one thing that makes the reviewer ask ' +
+        'it again.',
+    )
+  }
   return lines.join('\n') + '\n'
 }
 

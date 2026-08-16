@@ -1073,3 +1073,73 @@ a {
 .file-search .hint {
   white-space: nowrap;
 }
+
+/* A question is a different request from a change, so it does not look
+   like the resolved badge next to it. */
+.badge.question {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* The key list, which is also where the keys are documented. */
+.help-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: grid;
+  place-items: center;
+  z-index: 50;
+}
+.help {
+  background: var(--bg-elevated, var(--bg));
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1.25rem 1.5rem;
+  min-width: 20rem;
+  max-width: min(92vw, 28rem);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+}
+.help h2 {
+  margin: 0 0 0.75rem;
+  font-size: 1rem;
+}
+.help dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.4rem 1rem;
+  margin: 0 0 0.75rem;
+  align-items: baseline;
+}
+.help dt {
+  text-align: right;
+}
+.help dd {
+  margin: 0;
+}
+.help kbd {
+  font: inherit;
+  font-size: 0.8rem;
+  padding: 0.1rem 0.4rem;
+  border: 1px solid var(--border);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  background: var(--bg);
+}
+
+/* The preview header carries more than it used to - the renderer choice and
+   the sync switch on top of the rest - so the parts that can give way do.
+   The path is the first to shrink, the controls keep their size. */
+.preview-header .path {
+  min-width: 0;
+  flex-shrink: 1;
+}
+.preview-header .toggle,
+.preview-header .switch,
+.preview-header button,
+.preview-header .button {
+  flex-shrink: 0;
+}
+.preview-header .badge {
+  flex-shrink: 0;
+}

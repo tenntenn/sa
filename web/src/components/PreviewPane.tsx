@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { FileDiff, Status } from '../types'
 import { filePath } from '../types'
 import { client, type PreviewResult } from '../client'
+import { readSetting, writeSetting } from '../storage'
 
 interface Props {
   group: string
@@ -10,7 +11,19 @@ interface Props {
   status: Status | null
   /** narrow is set on a phone, where mo's own layout has no room. */
   narrow?: boolean
+  /** scrollTo is the fraction of the diff that has been scrolled past, or
+   * null when the diff is not driving the preview. */
+  scrollTo?: number | null
+  /** sync is whether the preview is following the diff, and onSync turns
+   * that off and on where the reader is looking. */
+  sync?: boolean
+  onSync?: (on: boolean) => void
 }
+
+/** PreviewKind is which of the two previews is showing. */
+export type PreviewKind = 'mo' | 'simple'
+
+const RENDERER_KEY = 'sa.preview.renderer'
 
 /**
  * PreviewPane shows the Markdown preview next to the diff.
@@ -24,15 +37,48 @@ interface Props {
  * would leave a column too narrow to read, so the Markdown is rendered here
  * and mo is one tap away in its own window.
  */
-export function PreviewPane({ group, diffId, file, status, narrow = false }: Props) {
+export function PreviewPane({
+  group,
+  diffId,
+  file,
+  status,
+  narrow = false,
+  scrollTo = null,
+  sync = false,
+  onSync,
+}: Props) {
   const [preview, setPreview] = useState<PreviewResult | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [reloadKey, setReloadKey] = useState(0)
   const [openingMo, setOpeningMo] = useState(false)
 
+  // Which preview to use is the reader's to choose: mo is the full one, and
+  // the simple one is rendered by this page, which is what lets the diff
+  // scroll it. A phone and an exported page have no embedded mo to choose.
+  const [chosen, setChosen] = useState<PreviewKind>(
+    () => (readSetting(RENDERER_KEY) === 'simple' ? 'simple' : 'mo'),
+  )
+  const forced = narrow || client.isStatic
+  const kind: PreviewKind = forced ? 'simple' : chosen
   const previewable = file !== null && file.isMarkdown && diffId !== null
-  const renderHere = narrow || client.isStatic
+  const renderHere = kind === 'simple'
+  const body = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    writeSetting(RENDERER_KEY, kind)
+  }, [kind])
+
+  // Follow the diff. Only the preview rendered here can be moved: mo is
+  // framed from another origin, where a page may not touch its scrolling.
+  useEffect(() => {
+    if (scrollTo === null || renderHere !== true) return
+    const el = body.current
+    if (!el) return
+    const room = el.scrollHeight - el.clientHeight
+    if (room <= 0) return
+    el.scrollTop = room * scrollTo
+  }, [scrollTo, renderHere, preview])
 
   useEffect(() => {
     if (!previewable || !file || !diffId) {
@@ -100,8 +146,13 @@ export function PreviewPane({ group, diffId, file, status, narrow = false }: Pro
         <span className="path">{filePath(file)}</span>
         {preview && (
           <>
-            <span className="badge" title={preview.path}>
-              {preview.source === 'worktree' ? 'working tree' : 'rebuilt from the diff'}
+            <span
+              className="badge"
+              title={`${preview.path}\n${
+                preview.source === 'worktree' ? 'the working tree file' : 'rebuilt from the diff'
+              }`}
+            >
+              {preview.source === 'worktree' ? 'tree' : 'rebuilt'}
             </span>
             {!preview.complete && (
               <span className="badge warn" title="A unified diff only carries the changed hunks">
@@ -111,6 +162,36 @@ export function PreviewPane({ group, diffId, file, status, narrow = false }: Pro
           </>
         )}
         <span className="spacer" />
+        {!forced && (
+          <div className="toggle" title="mo renders the full preview; the simple one is drawn by this page and can follow the diff">
+            <button className={kind === 'mo' ? 'active' : ''} onClick={() => setChosen('mo')}>
+              mo
+            </button>
+            <button className={kind === 'simple' ? 'active' : ''} onClick={() => setChosen('simple')}>
+              simple
+            </button>
+          </div>
+        )}
+        {previewable && onSync && (
+          <label
+            className="switch"
+            title={
+              !renderHere
+                ? 'Only the simple preview can follow the diff: mo is framed from another origin, where a page may not touch its scrolling'
+                : sync
+                  ? 'The preview follows the diff; scrolling it yourself stops that'
+                  : 'Follow the diff again'
+            }
+          >
+            <input
+              type="checkbox"
+              checked={sync && renderHere}
+              disabled={!renderHere}
+              onChange={(ev) => onSync(ev.target.checked)}
+            />
+            Sync
+          </label>
+        )}
         {!client.isStatic && (
           <button className="ghost" onClick={() => setReloadKey((k) => k + 1)} disabled={!previewable}>
             Reload
@@ -147,7 +228,13 @@ export function PreviewPane({ group, diffId, file, status, narrow = false }: Pro
           )}
         </div>
       ) : preview?.kind === 'html' ? (
-        <div className="markdown" dangerouslySetInnerHTML={{ __html: preview.html }} />
+        <div
+          className="markdown"
+          ref={body}
+          onWheel={() => onSync?.(false)}
+          onTouchMove={() => onSync?.(false)}
+          dangerouslySetInnerHTML={{ __html: preview.html }}
+        />
       ) : preview?.kind === 'frame' && preview.url ? (
         <iframe className="preview-frame" src={preview.url} title="Markdown preview" />
       ) : preview?.kind === 'frame' && preview.moUrl ? (

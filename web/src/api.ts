@@ -57,12 +57,14 @@ export interface NewComment {
   endLine: number
   body: string
   snippet: string
+  question?: boolean
 }
 
 /** CommentPatch is what can be edited on an existing comment. */
 export interface CommentPatch {
   body?: string
   resolved?: boolean
+  question?: boolean
 }
 
 export function addComment(group: string, comment: NewComment): Promise<Comment> {

@@ -41,10 +41,16 @@ func Prompt(g *model.Group, opts PromptOptions) string {
 		b.WriteString("No open review comments.\n")
 		return b.String()
 	}
+	questions := 0
+	for _, c := range comments {
+		if c.Question {
+			questions++
+		}
+	}
 	if g.ReviewVerdict == model.VerdictApproved {
-		fmt.Fprintf(&b, "%d comment(s) came with the approval.\n", len(comments))
+		fmt.Fprintf(&b, "%d comment(s) came with the approval%s.\n", len(comments), asking(questions))
 	} else {
-		fmt.Fprintf(&b, "%d comment(s) to address.\n", len(comments))
+		fmt.Fprintf(&b, "%d comment(s) to address%s.\n", len(comments), asking(questions))
 	}
 
 	titles := map[string]string{}
@@ -59,6 +65,9 @@ func Prompt(g *model.Group, opts PromptOptions) string {
 		}
 		if c.Author != "" {
 			fmt.Fprintf(&b, "\nFrom: %s\n", c.Author)
+		}
+		if c.Question {
+			b.WriteString("\nThis one is a question: answer it.\n")
 		}
 		if c.Resolved {
 			b.WriteString("\nStatus: resolved\n")
@@ -89,6 +98,12 @@ func Prompt(g *model.Group, opts PromptOptions) string {
 			b.WriteString("Address every comment above. A suggestion block replaces the lines it " +
 				"names, verbatim. When a comment is not worth acting on, say why instead of " +
 				"changing the code.\n")
+		}
+		if questions > 0 {
+			b.WriteString("\nA comment marked as a question is asking for an answer, not for a " +
+				"change. Answer it in your reply, in words, and change the code only if your " +
+				"own answer says it should change. Leaving a question unanswered is the one " +
+				"thing that makes the reviewer ask it again.\n")
 		}
 	}
 	return b.String()
@@ -145,4 +160,13 @@ func verdictSentence(v model.Verdict) string {
 	default:
 		return "left comments without deciding either way"
 	}
+}
+
+// asking counts the comments that want an answer rather than a change, for
+// the line that says how much there is to do.
+func asking(questions int) string {
+	if questions == 0 {
+		return ""
+	}
+	return fmt.Sprintf(", %d of them a question", questions)
 }

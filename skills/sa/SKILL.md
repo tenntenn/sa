@@ -155,7 +155,12 @@ human can tell your notes from theirs:
 ```
 sa comment <path>:<line> -m "<question or note>" --author <you> --target <topic>
 sa comment <path>:<line>-<line> -m "..." --suggest "<replacement>" --author <you>
+sa comment <path>:<line> -m "<question>" --question --author <you>
 ```
+
+`--question` marks a comment that wants an **answer, not a change**. The two
+read alike in prose — "should this be a 404?" can be either — so say which
+it is, and the reader is told plainly rather than guessing.
 
 `--suggest` appends the replacement to the comment as a ` ```suggestion `
 block, so the human sees it as a proposed change and can copy it:
@@ -181,7 +186,8 @@ sa comments --target <topic> --format json
 ```
 
 Every JSON entry has `id`, `path`, `author`, `side` (`new` or `old`),
-`startLine`, `endLine`, `body`, `snippet`, `suggestions` and `resolved`. Line
+`startLine`, `endLine`, `body`, `snippet`, `suggestions`, `question` and
+`resolved`. Line
 numbers refer to the side named by `side`. `author` is empty for the comments
 the human wrote in the browser and set for the ones posted from the command
 line — including your own, so skip those when working through the list.
@@ -199,6 +205,12 @@ Work through the comments one by one. Change the code where the comment asks
 for a change, and replace the named lines exactly as written where a comment
 carries a suggestion; when you disagree or a comment cannot be acted on, say
 so explicitly in your reply to the user rather than silently skipping it.
+
+A comment marked as a **question** (`"question": true`, and "This one is a
+question: answer it." in the Markdown output) is asking for an answer.
+Answer it in words in your reply, and change the code only if your own
+answer says it should change. Rewriting code in place of answering is the
+one response that leaves the reviewer having to ask again.
 
 ### 7. Send the next round
 
@@ -351,6 +363,7 @@ them correct it.
 | `... \| sa --collapse '<glob>'` | Fold generated files away, repeatable |
 | `... \| sa --no-open` | Do not open a browser (useful in headless runs) |
 | `sa comment <path>:<line> -m "..."` | Leave a comment of your own (pass `--author`) |
+| `sa comment ... --question` | Mark it as wanting an answer, not a change |
 | `sa comment --json` | Post many comments at once, read from stdin |
 | `sa comments [-t <name>]` | Print open comments as Markdown |
 | `sa comments --format json` | Print comments as JSON |

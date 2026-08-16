@@ -106,10 +106,22 @@ $ sa comments -t default   # the flag still wins
   the **Files**, **Diff** and **Preview** switches in the header. Dragging an
   edge all the way in minimises that pane, and dragging it back out or double
   clicking brings it back. The layout is remembered per browser.
-- Markdown files get a preview pane. The preview shows the working tree file
-  when it exists; otherwise sa rebuilds the new side from the diff, which is
+- Markdown files get a preview pane, rendered either by **mo** or by the
+  page itself (**simple**) — the toggle is in the preview header, and the
+  choice is remembered. The preview shows the working tree file when it
+  exists; otherwise sa rebuilds the new side from the diff, which is
   complete for new files and partial for modified ones (a unified diff only
   carries the changed hunks).
+- **Sync** makes the preview follow the diff as you scroll, by fraction
+  rather than by line — the two documents do not agree on lines, and
+  pretending they do lands you in the wrong place with more confidence.
+  Scrolling the preview yourself turns it off where you are, and the switch
+  turns it back on. It works with the simple preview only: mo is framed from
+  another origin, where a page may not touch its scrolling.
+- Press `?` for the keyboard shortcuts: `j`/`k` move between files, `n`/`p`
+  between comments, `f` folds, `v` switches split and unified, `s` toggles
+  the scroll sync, `r` opens the review box, `/` filters the file list. None
+  of them fires while you are typing.
 - The header switch cycles **Auto / Light / Dark**: Auto follows the system
   (or whatever host an exported page is read in), and a choice is remembered
   per browser. The Markdown preview keeps mo's own theme — mo has its own
@@ -169,6 +181,12 @@ $ cat new.txt | sa comment main.go:42 -m "Simpler" --suggest -
 
 `--suggest` appends the replacement to the comment as a ` ```suggestion `
 block; the same block can be typed straight into `-m`.
+
+`--question` marks a comment as wanting an answer rather than a change —
+**Question** next to the comment box does the same in the browser. The two
+requests read alike in prose ("should this be a 404?" is either), so whoever
+writes the comment says which it is, and `sa comments` tells the reader:
+*This one is a question: answer it.*
 
 The lines are the ones the diff shows (`--side old` for a removed line), the
 file is looked up in the newest diff carrying that path, and sa fills in the

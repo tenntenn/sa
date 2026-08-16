@@ -524,6 +524,8 @@ type AddCommentRequest struct {
 	EndLine   int    `json:"endLine"`
 	Body      string `json:"body"`
 	Snippet   string `json:"snippet"`
+	// Question marks a comment that wants an answer, not a change.
+	Question bool `json:"question,omitempty"`
 	// Suggestion is a convenience for clients that only have the
 	// replacement text: it is appended to Body as a fenced suggestion
 	// block, which is where a suggestion actually lives.
@@ -585,6 +587,7 @@ func (s *Server) handleAddComment(w http.ResponseWriter, r *http.Request) {
 		StartLine: req.StartLine,
 		EndLine:   req.EndLine,
 		Body:      body,
+		Question:  req.Question,
 		Snippet:   req.Snippet,
 	})
 	if err != nil {
@@ -599,6 +602,7 @@ func (s *Server) handleAddComment(w http.ResponseWriter, r *http.Request) {
 type UpdateCommentRequest struct {
 	Body     *string `json:"body,omitempty"`
 	Resolved *bool   `json:"resolved,omitempty"`
+	Question *bool   `json:"question,omitempty"`
 }
 
 // lineSpec formats a line range for an error message.
@@ -622,6 +626,7 @@ func (s *Server) handleUpdateComment(w http.ResponseWriter, r *http.Request) {
 	c, found := s.store.UpdateComment(name, r.PathValue("id"), CommentPatch{
 		Body:     req.Body,
 		Resolved: req.Resolved,
+		Question: req.Question,
 	})
 	if !found {
 		http.Error(w, "no such comment", http.StatusNotFound)

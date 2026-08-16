@@ -437,6 +437,7 @@ func (s *Store) AddComment(c *model.Comment) (*model.Comment, error) {
 type CommentPatch struct {
 	Body     *string
 	Resolved *bool
+	Question *bool
 }
 
 // UpdateComment edits a comment in place.
@@ -456,6 +457,9 @@ func (s *Store) UpdateComment(group, id string, patch CommentPatch) (*model.Comm
 		}
 		if patch.Resolved != nil {
 			c.Resolved = *patch.Resolved
+		}
+		if patch.Question != nil {
+			c.Question = *patch.Question
 		}
 		c.UpdatedAt = time.Now()
 		s.persist()

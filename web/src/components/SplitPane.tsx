@@ -8,6 +8,9 @@ interface Props {
    * the panes is minimised away. */
   ratio: number
   onRatioChange: (ratio: number) => void
+  /** onLeftScroll reports how far down the left pane is, as a fraction, for
+   * a right pane that is following it. */
+  onLeftScroll?: (fraction: number) => void
 }
 
 /** SPLIT_DEFAULT is the share the diff gets before anyone drags anything. */
@@ -36,7 +39,7 @@ export function nudgeRatio(ratio: number, direction: -1 | 1): number {
 }
 
 /** SplitPane shows the diff and the preview side by side, with a draggable divider. */
-export function SplitPane({ left, right, ratio, onRatioChange }: Props) {
+export function SplitPane({ left, right, ratio, onRatioChange, onLeftScroll }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
 
   const onDrag = useCallback(
@@ -65,6 +68,14 @@ export function SplitPane({ left, right, ratio, onRatioChange }: Props) {
         className={`split-pane${ratio === 0 ? ' collapsed' : ''}`}
         style={{ width: `${ratio * 100}%` }}
         aria-hidden={ratio === 0}
+        // The pane is what scrolls, and a scroll event does not bubble, so
+        // this is the only place a listener hears about it.
+        onScroll={(ev) => {
+          if (!onLeftScroll) return
+          const el = ev.currentTarget
+          const room = el.scrollHeight - el.clientHeight
+          onLeftScroll(room > 0 ? Math.min(1, Math.max(0, el.scrollTop / room)) : 0)
+        }}
       >
         {left}
       </div>

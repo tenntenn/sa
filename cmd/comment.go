@@ -22,6 +22,7 @@ var (
 	commentSuggest     string
 	commentSuggestFrom string
 	commentAuthor      string
+	commentQuestion    bool
 	commentSide        string
 	commentDiffID      string
 	commentBulk        bool
@@ -45,6 +46,7 @@ sees it in the browser next to the diff.
   $ sa comment README.md:12-18 -m "Reworded" --suggest "$(cat new.md)"
   $ cat new.txt | sa comment main.go:42 -m "Simpler" --suggest -
   $ sa comment --author claude cmd/root.go:88 -m "Left over from the old flag"
+  $ sa comment --question main.go:42 -m "Is a 404 right here, or a 409?"
 
 The line numbers are the ones of the new side of the diff, the same ones the
 diff shows; --side old comments on a removed line instead. The file is looked
@@ -80,6 +82,8 @@ func init() {
 		`Suggested replacement, appended to the body as a "suggestion" block ("-" reads stdin)`)
 	f.StringVar(&commentSuggestFrom, "suggest-file", "", "Suggested replacement read from a file")
 	f.StringVar(&commentAuthor, "author", DefaultAuthor, "Who is commenting")
+	f.BoolVar(&commentQuestion, "question", false,
+		"Mark it as a question: it wants an answer, not a change")
 	f.StringVar(&commentSide, "side", "new", "Side of the diff the lines belong to: new or old")
 	f.StringVar(&commentDiffID, "diff", "", "Diff ID (default: the newest diff carrying the path)")
 	f.BoolVar(&commentBulk, "json", false, "Read a JSON array of comments from stdin")
@@ -166,6 +170,7 @@ func singleComment(spec string) ([]server.AddCommentRequest, error) {
 		StartLine:  start,
 		EndLine:    end,
 		Body:       commentBody,
+		Question:   commentQuestion,
 		Suggestion: suggestion,
 	}}, nil
 }
@@ -201,6 +206,7 @@ type bulkComment struct {
 	Side       string    `json:"side"`
 	Body       string    `json:"body"`
 	Suggestion string    `json:"suggestion"`
+	Question   bool      `json:"question"`
 	Author     string    `json:"author"`
 	DiffID     string    `json:"diffId"`
 }
@@ -278,6 +284,7 @@ func readBulkComments(r io.Reader) ([]server.AddCommentRequest, error) {
 			StartLine:  start,
 			EndLine:    end,
 			Body:       e.Body,
+			Question:   e.Question || commentQuestion,
 			Suggestion: e.Suggestion,
 		})
 	}

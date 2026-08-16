@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { groupFromLocation } from './api'
 import { client } from './client'
 import { readSetting, writeSetting } from './storage'
@@ -9,6 +9,7 @@ import { PreviewPane } from './components/PreviewPane'
 import { Sidebar } from './components/Sidebar'
 import { clampRatio, SplitPane, SPLIT_DEFAULT } from './components/SplitPane'
 import { useNarrowLayout } from './useMediaQuery'
+import { plainKey, shortcuts, typingInto } from './shortcuts'
 import { applyTheme, nextTheme, storedTheme, themeLabel, type Theme } from './theme'
 
 interface Selected {
@@ -61,9 +62,21 @@ export function App() {
   const [submitting, setSubmitting] = useState(false)
   const [closing, setClosing] = useState(false)
   const [reviewNote, setReviewNote] = useState<string | null>(null)
+  const [help, setHelp] = useState(false)
+  // foldNudge and viewNudge are how a key reaches the file on screen: the
+  // view owns that state, and a counter is a message it cannot miss.
+  const [foldNudge, setFoldNudge] = useState(0)
+  const [viewNudge, setViewNudge] = useState(0)
   const [sidebarWidth, setSidebarWidth] = useState(storedSidebarWidth)
   const [theme, setTheme] = useState<Theme>(storedTheme)
   const [query, setQuery] = useState('')
+  // Scrolling the diff moves the preview with it, as a fraction of the way
+  // down rather than by line: the two documents do not agree on lines, and
+  // pretending they do lands the reader in the wrong place with more
+  // confidence. It is off the moment the reader says so, and the reader
+  // says so simply by scrolling the preview themselves.
+  const [syncScroll, setSyncScroll] = useState(true)
+  const [scrollTo, setScrollTo] = useState<number | null>(null)
   const bodyRef = useRef<HTMLDivElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
 
@@ -84,24 +97,10 @@ export function App() {
 
   const toggleSidebar = () => setSidebarWidth((w) => (w === 0 ? SIDEBAR_DEFAULT : 0))
 
-  // "/" jumps to the path filter, the way it does in a pager. It opens the
-  // file list first when it was put away, since there is nothing to filter
-  // otherwise, and it stays out of the way while anything else is being
-  // typed into.
-  useEffect(() => {
-    const focusSearch = (ev: KeyboardEvent) => {
-      if (ev.key !== '/' || ev.metaKey || ev.ctrlKey || ev.altKey) return
-      const target = ev.target as HTMLElement | null
-      if (target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))) {
-        return
-      }
-      ev.preventDefault()
-      setSidebarWidth((w) => (w === 0 ? SIDEBAR_DEFAULT : w))
-      if (narrow) setPane('files')
-      window.setTimeout(() => searchRef.current?.focus(), 0)
-    }
-    window.addEventListener('keydown', focusSearch)
-    return () => window.removeEventListener('keydown', focusSearch)
+  const focusSearch = useCallback(() => {
+    setSidebarWidth((w) => (w === 0 ? SIDEBAR_DEFAULT : w))
+    if (narrow) setPane('files')
+    window.setTimeout(() => searchRef.current?.focus(), 0)
   }, [narrow])
 
   useEffect(() => {
@@ -220,6 +219,100 @@ export function App() {
     }
   }
 
+  // The file list as one sequence, which is what "next file" means.
+  const flatFiles = useMemo(
+    () => diffs.flatMap((d) => d.files.map((f) => ({ diffId: d.id, fileId: f.id }))),
+    [diffs],
+  )
+
+  const stepFile = useCallback(
+    (by: number) => {
+      if (flatFiles.length === 0) return
+      const at = flatFiles.findIndex(
+        (f) => f.diffId === selected?.diffId && f.fileId === selected.fileId,
+      )
+      const next = flatFiles[Math.min(flatFiles.length - 1, Math.max(0, at + by))]
+      if (next) {
+        setSelected(next)
+        if (narrow) setPane('diff')
+      }
+    },
+    [flatFiles, selected, narrow],
+  )
+
+  // Comments are what a review is for, so stepping through them is stepping
+  // through the review rather than through the files: the next one may be
+  // in another file, and going there is the point.
+  const stepComment = useCallback(
+    (by: number) => {
+      const open = comments.filter((c) => !c.resolved)
+      if (open.length === 0) return
+      const at = open.findIndex((c) => c.diffId === selected?.diffId && c.fileId === selected.fileId)
+      const index = at < 0 ? (by > 0 ? 0 : open.length - 1) : at + by
+      const target = open[(index + open.length) % open.length]
+      if (!target) return
+      setSelected({ diffId: target.diffId, fileId: target.fileId })
+      if (narrow) setPane('diff')
+      window.setTimeout(() => {
+        document.querySelector('.comment')?.scrollIntoView({ block: 'center' })
+      }, 50)
+    },
+    [comments, selected, narrow],
+  )
+
+  // One place where every key is answered. Each is a single unmodified
+  // press, which only works because nothing fires while the reader is
+  // typing - a comment full of the letter "f" would otherwise fold the file
+  // away eleven times.
+  useEffect(() => {
+    const onKey = (ev: KeyboardEvent) => {
+      if (!plainKey(ev)) return
+      if (ev.key === 'Escape') {
+        setHelp(false)
+        setReviewNote(null)
+        return
+      }
+      if (typingInto(ev.target)) return
+      switch (ev.key) {
+        case 'j':
+          stepFile(1)
+          break
+        case 'k':
+          stepFile(-1)
+          break
+        case 'n':
+          stepComment(1)
+          break
+        case 'p':
+          stepComment(-1)
+          break
+        case '/':
+          focusSearch()
+          break
+        case 'f':
+          setFoldNudge((n) => n + 1)
+          break
+        case 'v':
+          setViewNudge((n) => n + 1)
+          break
+        case 's':
+          setSyncScroll((on) => !on)
+          break
+        case 'r':
+          if (!client.isStatic && diffs.length > 0) setReviewNote((note) => (note === null ? '' : null))
+          break
+        case '?':
+          setHelp((open) => !open)
+          break
+        default:
+          return
+      }
+      ev.preventDefault()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [stepFile, stepComment, focusSearch, diffs.length])
+
   const selectFile = (diffId: string, fileId: string) => {
     setSelected({ diffId, fileId })
     // On a phone the file list covers the screen, so picking a file means
@@ -256,6 +349,8 @@ export function App() {
         comments={fileComments}
         narrow={narrow}
         onChanged={() => void reload()}
+        foldNudge={foldNudge}
+        viewNudge={viewNudge}
       />
     ) : (
       <p className="empty">Select a file.</p>
@@ -268,6 +363,9 @@ export function App() {
       file={selectedFile}
       status={status}
       narrow={narrow}
+      scrollTo={syncScroll ? scrollTo : null}
+      sync={syncScroll}
+      onSync={setSyncScroll}
     />
   )
 
@@ -468,6 +566,32 @@ export function App() {
 
       {error && <div className="error banner">{error}</div>}
 
+      {help && (
+        <div className="help-backdrop" onClick={() => setHelp(false)}>
+          <div
+            className="help"
+            role="dialog"
+            aria-label="Keyboard shortcuts"
+            onClick={(ev) => ev.stopPropagation()}
+          >
+            <h2>Keys</h2>
+            <dl>
+              {shortcuts.map((s) => (
+                <Fragment key={s.keys.join('+')}>
+                  <dt>
+                    {s.keys.map((k) => (
+                      <kbd key={k}>{k}</kbd>
+                    ))}
+                  </dt>
+                  <dd>{s.what}</dd>
+                </Fragment>
+              ))}
+            </dl>
+            <p className="hint">None of them fires while you are typing.</p>
+          </div>
+        </div>
+      )}
+
       {narrow ? (
         <div className="body">
           {diffs.length === 0 ? (
@@ -498,6 +622,7 @@ export function App() {
                 onRatioChange={setSplitRatio}
                 left={diffPane}
                 right={previewPane}
+                onLeftScroll={syncScroll ? setScrollTo : undefined}
               />
             )}
           </main>
