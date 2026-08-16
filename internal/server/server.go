@@ -12,7 +12,6 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -21,7 +20,6 @@ import (
 	"github.com/tenntenn/sa/internal/diff"
 	"github.com/tenntenn/sa/internal/mo"
 	"github.com/tenntenn/sa/internal/model"
-	"github.com/tenntenn/sa/internal/source"
 )
 
 // maxDiffSize bounds a single diff sent to the server.
@@ -148,9 +146,7 @@ func (s *Server) handler() http.Handler {
 	mux.HandleFunc("GET /_/api/groups", s.handleGroups)
 	mux.HandleFunc("GET /_/api/groups/{group}", s.handleGroup)
 	mux.HandleFunc("DELETE /_/api/groups/{group}", s.handleDeleteGroup)
-	mux.HandleFunc("POST /_/api/diffs", s.handleAddDiffHere)
 	mux.HandleFunc("POST /_/api/groups/{group}/diffs", s.handleAddDiff)
-	mux.HandleFunc("GET /_/api/resolve", s.handleResolve)
 	mux.HandleFunc("DELETE /_/api/groups/{group}/diffs/{diff}", s.handleDeleteDiff)
 	mux.HandleFunc("GET /_/api/groups/{group}/diffs/{diff}/files/{file}/preview", s.handlePreview)
 	mux.HandleFunc("GET /_/api/groups/{group}/diffs/{diff}/files/{file}/content", s.handleFileContent)
@@ -268,12 +264,9 @@ func (s *Server) handleDeleteGroup(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// AddDiffRequest is the body of POST /_/api/groups/{group}/diffs and of
-// POST /_/api/diffs.
+// AddDiffRequest is the body of POST /_/api/groups/{group}/diffs.
 type AddDiffRequest struct {
-	Title string `json:"title"`
-	// BaseDir is the directory the diff was sent from. sa works out the
-	// directory its paths are actually rooted at from there.
+	Title   string `json:"title"`
 	BaseDir string `json:"baseDir"`
 	Content string `json:"content"`
 }
@@ -285,23 +278,11 @@ type AddDiffResponse struct {
 	Diff  *model.Diff `json:"diff"`
 }
 
-// handleAddDiffHere stores a diff without being told which group: the group
-// follows from where the diff belongs on disk, so every checkout gets one of
-// its own without anyone naming it.
-func (s *Server) handleAddDiffHere(w http.ResponseWriter, r *http.Request) {
-	s.addDiff(w, r, "")
-}
-
 func (s *Server) handleAddDiff(w http.ResponseWriter, r *http.Request) {
 	name, ok := s.groupParam(w, r)
 	if !ok {
 		return
 	}
-	s.addDiff(w, r, name)
-}
-
-// addDiff stores a diff. An empty name means "wherever this diff belongs".
-func (s *Server) addDiff(w http.ResponseWriter, r *http.Request, name string) {
 	var req AddDiffRequest
 	if err := json.NewDecoder(io.LimitReader(r.Body, maxDiffSize)).Decode(&req); err != nil {
 		http.Error(w, "invalid request: "+err.Error(), http.StatusBadRequest)
@@ -316,20 +297,9 @@ func (s *Server) addDiff(w http.ResponseWriter, r *http.Request, name string) {
 		http.Error(w, "no file diff found in the input", http.StatusBadRequest)
 		return
 	}
-
-	// The diff says where it belongs: its paths are matched against the
-	// filesystem, starting at the directory it was sent from.
-	root := source.Root(req.BaseDir, files)
-	if name == "" {
-		name = s.groupForRoot(root)
-	}
-	baseDir := root
-	if baseDir == "" {
-		baseDir = req.BaseDir
-	}
-	d := s.store.AddDiff(name, root, &model.Diff{
+	d := s.store.AddDiff(name, &model.Diff{
 		Title:   req.Title,
-		BaseDir: baseDir,
+		BaseDir: req.BaseDir,
 		Raw:     req.Content,
 		Files:   files,
 	})
@@ -339,52 +309,6 @@ func (s *Server) addDiff(w http.ResponseWriter, r *http.Request, name string) {
 		URL:   GroupURL(s.BaseURL(), name),
 		Diff:  d,
 	})
-}
-
-// groupForRoot names the group a root belongs to, reusing the one that
-// already holds it.
-func (s *Server) groupForRoot(root string) string {
-	if root == "" {
-		return DefaultGroup
-	}
-	if name, ok := s.store.GroupForRoot(root); ok {
-		return name
-	}
-	return s.store.NameForRoot(root)
-}
-
-// ResolveResponse says which group a directory belongs to.
-type ResolveResponse struct {
-	Group string `json:"group"`
-	Root  string `json:"root,omitempty"`
-	URL   string `json:"url"`
-	// Known is false when no diff from there has been sent yet.
-	Known bool `json:"known"`
-}
-
-// handleResolve answers "which group is this directory?", so that a later
-// `sa comments` from the same checkout finds the same review.
-func (s *Server) handleResolve(w http.ResponseWriter, r *http.Request) {
-	dir := filepath.Clean(r.URL.Query().Get("dir"))
-	res := ResolveResponse{Group: DefaultGroup}
-	if dir != "" && dir != "." {
-		// Walk up: a command run three directories inside a checkout still
-		// means the checkout.
-		for current := dir; ; {
-			if name, ok := s.store.GroupForRoot(current); ok {
-				res = ResolveResponse{Group: name, Root: current, Known: true}
-				break
-			}
-			parent := filepath.Dir(current)
-			if parent == current {
-				res = ResolveResponse{Group: s.store.NameForRoot(dir), Root: dir}
-				break
-			}
-			current = parent
-		}
-	}
-	res.URL = GroupURL(s.BaseURL(), res.Group)
-	writeJSON(w, http.StatusOK, res)
 }
 
 func (s *Server) handleDeleteDiff(w http.ResponseWriter, r *http.Request) {

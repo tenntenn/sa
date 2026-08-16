@@ -89,8 +89,6 @@ export interface GroupSummary {
   reviewed: boolean
   /** hooks is what the server will run when the review is submitted. */
   hooks: number
-  /** root is the checkout the group belongs to, when sa worked it out. */
-  root?: string
 }
 
 export interface Status {

@@ -5,7 +5,6 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -708,103 +707,5 @@ func TestHookNeedsSomethingToDo(t *testing.T) {
 	resp := postJSON(t, ts.URL+"/_/api/groups/default/hooks", model.Hook{}, nil)
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("status = %s, want 400 for an empty hook", resp.Status)
-	}
-}
-
-func TestDiffsLandInTheGroupOfTheirCheckout(t *testing.T) {
-	ts, _ := newTestServer(t)
-	base := t.TempDir()
-
-	// Two checkouts of the same project, as two worktrees would be.
-	makeTree := func(name string) string {
-		root := filepath.Join(base, name)
-		for _, p := range []string{"README.md", "docs/new.md"} {
-			full := filepath.Join(root, filepath.FromSlash(p))
-			if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
-				t.Fatal(err)
-			}
-			if err := os.WriteFile(full, []byte("x\n"), 0o600); err != nil {
-				t.Fatal(err)
-			}
-		}
-		return root
-	}
-	main := makeTree("app")
-	feature := makeTree("app-feature")
-
-	var first, second AddDiffResponse
-	// No group is named: the diff says where it belongs.
-	postJSON(t, ts.URL+"/_/api/diffs", AddDiffRequest{BaseDir: filepath.Join(main, "docs"), Content: sampleDiff}, &first)
-	postJSON(t, ts.URL+"/_/api/diffs", AddDiffRequest{BaseDir: feature, Content: sampleDiff}, &second)
-
-	if first.Group != "app" {
-		t.Errorf("first group = %q, want the directory name", first.Group)
-	}
-	if second.Group != "app-feature" {
-		t.Errorf("second group = %q", second.Group)
-	}
-	if first.Group == second.Group {
-		t.Fatal("two checkouts ended up in one group")
-	}
-	// A diff sent from inside the checkout is rooted at the checkout, so the
-	// preview finds the files.
-	if first.Diff.BaseDir != main {
-		t.Errorf("baseDir = %q, want the root of the checkout %q", first.Diff.BaseDir, main)
-	}
-
-	// The same directory later resolves to the same group, from anywhere
-	// inside it.
-	var res ResolveResponse
-	getJSON(t, ts.URL+"/_/api/resolve?dir="+url.QueryEscape(filepath.Join(main, "docs")), &res)
-	if res.Group != "app" || !res.Known {
-		t.Errorf("resolve = %+v, want the group of the checkout", res)
-	}
-}
-
-func TestSameNameCheckoutsGetSeparateGroups(t *testing.T) {
-	ts, _ := newTestServer(t)
-	base := t.TempDir()
-	makeTree := func(parent string) string {
-		root := filepath.Join(base, parent, "app")
-		if err := os.MkdirAll(root, 0o755); err != nil {
-			t.Fatal(err)
-		}
-		for _, p := range []string{"README.md", "docs/new.md"} {
-			full := filepath.Join(root, filepath.FromSlash(p))
-			if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
-				t.Fatal(err)
-			}
-			if err := os.WriteFile(full, []byte("x\n"), 0o600); err != nil {
-				t.Fatal(err)
-			}
-		}
-		return root
-	}
-	one, two := makeTree("one"), makeTree("two")
-
-	var first, second AddDiffResponse
-	postJSON(t, ts.URL+"/_/api/diffs", AddDiffRequest{BaseDir: one, Content: sampleDiff}, &first)
-	postJSON(t, ts.URL+"/_/api/diffs", AddDiffRequest{BaseDir: two, Content: sampleDiff}, &second)
-
-	if first.Group != "app" {
-		t.Errorf("first group = %q", first.Group)
-	}
-	if second.Group == first.Group {
-		t.Errorf("two directories named %q share a group", "app")
-	}
-	if !strings.HasPrefix(second.Group, "app-") {
-		t.Errorf("second group = %q, want the name with a tag", second.Group)
-	}
-}
-
-func TestResolveOutsideAnyCheckout(t *testing.T) {
-	ts, _ := newTestServer(t)
-	var res ResolveResponse
-	getJSON(t, ts.URL+"/_/api/resolve?dir="+url.QueryEscape(filepath.Join(t.TempDir(), "elsewhere")), &res)
-	if res.Known {
-		t.Errorf("resolve = %+v, want an unknown directory", res)
-	}
-	if res.Group == "" {
-		t.Error("resolve should still suggest a group name")
 	}
 }

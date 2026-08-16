@@ -49,7 +49,7 @@ caller "not reviewed yet" as opposed to "something went wrong".`,
 
 func init() {
 	f := waitCmd.Flags()
-	f.StringVarP(&target, "target", "t", "", "Group name (default: the checkout the command runs in)")
+	f.StringVarP(&target, "target", "t", "", "Group name (default \"default\", or $SA_TARGET)")
 	f.IntVarP(&port, "port", "p", DefaultPort, "Server port")
 	f.StringVarP(&bind, "bind", "b", "localhost", "Bind address")
 	f.DurationVar(&waitTimeout, "timeout", 0, "Give up after this long (0 waits forever)")
@@ -63,13 +63,13 @@ const exitNotReviewed = 2
 
 func runWait(cmd *cobra.Command, _ []string) error {
 	ctx := cmd.Context()
+	group, err := groupName(target)
+	if err != nil {
+		return err
+	}
 	c := client.New(addr(), 10*time.Second)
 	if _, err := c.Status(ctx); err != nil {
 		return fmt.Errorf("no sa server found on %s", c.Addr)
-	}
-	group, err := resolveGroup(ctx, c, target)
-	if err != nil {
-		return err
 	}
 
 	g, err := c.Group(ctx, group)

@@ -51,25 +51,10 @@ func (c *Client) Status(ctx context.Context) (*server.Status, error) {
 	return &st, nil
 }
 
-// AddDiff sends a diff to a group. An empty group lets the server decide,
-// which puts the diff with the checkout it belongs to.
+// AddDiff sends a diff to a group.
 func (c *Client) AddDiff(ctx context.Context, group string, req server.AddDiffRequest) (*server.AddDiffResponse, error) {
-	u := c.url("/_/api/diffs")
-	if group != "" {
-		u = c.url("/_/api/groups/%s/diffs", url.PathEscape(group))
-	}
 	var res server.AddDiffResponse
-	if err := c.do(ctx, http.MethodPost, u, req, &res); err != nil {
-		return nil, err
-	}
-	return &res, nil
-}
-
-// Resolve asks which group a directory belongs to.
-func (c *Client) Resolve(ctx context.Context, dir string) (*server.ResolveResponse, error) {
-	var res server.ResolveResponse
-	u := c.url("/_/api/resolve") + "?dir=" + url.QueryEscape(dir)
-	if err := c.do(ctx, http.MethodGet, u, nil, &res); err != nil {
+	if err := c.do(ctx, http.MethodPost, c.url("/_/api/groups/%s/diffs", url.PathEscape(group)), req, &res); err != nil {
 		return nil, err
 	}
 	return &res, nil

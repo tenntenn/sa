@@ -42,25 +42,26 @@ https://github.com/k1LoW/mo/releases).
 
 ### 1. Send the diff
 
-Pipe the diff into `sa`:
+Pipe the diff into `sa` and use `--target` to name the review, so several
+reviews can be open at once without mixing their comments:
 
 ```
-git diff | sa
+git diff | sa --target <topic>
 ```
 
-sa gives every checkout a review of its own — it finds where the diff belongs
-by looking for the files it names — so working in two worktrees at once needs
-nothing from you. Add `--target <topic>` when several reviews of the *same*
-checkout should stay apart (one per task, say); use the same `--target` for
-every later command of that review.
+Pick the name yourself and keep using it for every command of that review.
+sa attaches no meaning to it, so make it stand for whatever separates this
+review from your others — the task, the branch, the checkout you are working
+in. If everything you do in this session belongs to one review, export
+`SA_TARGET=<topic>` once instead of repeating the flag.
 
 Other ways to produce the same diff text:
 
 ```
-git diff HEAD~1 | sa                      # a specific range
-git diff --cached | sa                    # staged changes
-diff -u old.txt new.txt | sa
-cat change.patch | sa
+git diff HEAD~1 | sa --target <topic>     # a specific range
+git diff --cached | sa --target <topic>   # staged changes
+diff -u old.txt new.txt | sa --target <topic>
+cat change.patch | sa --target <topic>
 ```
 
 sa prints the review URL and returns immediately; the server keeps running in
@@ -198,10 +199,8 @@ artifact).
 | `... \| sa export <file>` | Write the review as one self-contained HTML page |
 | `... \| sa export --fragment <file>` | The same, body only, for embedding |
 
-`--target` defaults to the checkout the command runs in, so the commands of
-one review need no flag as long as they run in the same tree. `--port`
-(default 6280) selects the server; use it only if the user runs sa on a
-non-default port.
+`--port` (default 6280) selects the server; use it only if the user runs sa
+on a non-default port.
 
 ## Notes
 

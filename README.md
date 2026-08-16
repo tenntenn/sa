@@ -47,24 +47,6 @@ $ diff -u old.md new.md | sa
 $ cat change.patch | sa
 ```
 
-Every checkout gets a review of its own:
-
-```console
-$ cd ~/src/app        && git diff | sa   # http://localhost:6280/app
-$ cd ~/src/app-hotfix && git diff | sa   # http://localhost:6280/app-hotfix
-$ cd ~/src/app/internal/server && sa comments   # still the "app" review
-```
-
-sa works out where a diff belongs by **looking for the files it names**,
-starting at the directory it was sent from and walking up: the directory that
-explains the most of them is the root. No version control system is asked, so
-it works the same for a git worktree, a jj workspace, an unpacked tarball or
-a patch from a stranger — and a diff sent from three directories inside a
-checkout still lands in that checkout's review, with its Markdown previews
-resolving properly. Two directories with the same name get a short tag to
-keep them apart. `--target` (or `SA_TARGET`) names a group by hand instead,
-for reviews that are about a topic rather than a checkout.
-
 The first invocation starts the server on <http://localhost:6280>, opens a
 browser and returns the shell. Later invocations add to the running server.
 
@@ -73,6 +55,23 @@ $ sa --status          # what is being reviewed
 $ sa --clear -t api    # drop the diffs and comments of a group
 $ sa --restart         # restart, keeping the session
 $ sa --shutdown        # stop the server
+```
+
+### Groups
+
+`--target` (`-t`) puts a diff in a named group with its own URL, its own
+comments and its own review. What a group stands for is up to you: a task, a
+branch, a checkout you keep open next to another one. sa does not try to
+work any of that out — it only keeps apart what you asked it to keep apart.
+
+`SA_TARGET` says it once for a whole shell, which is what a script or an
+agent driving several reviews at a time wants:
+
+```console
+$ export SA_TARGET=hotfix
+$ git diff | sa            # http://localhost:6280/hotfix
+$ sa comments              # the comments of the same review
+$ sa comments -t default   # the flag still wins
 ```
 
 ### Reviewing

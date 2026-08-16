@@ -51,7 +51,7 @@ makes it useful and worth being deliberate about.`,
 
 func init() {
 	f := hookCmd.Flags()
-	f.StringVarP(&target, "target", "t", "", "Group name (default: the checkout the command runs in)")
+	f.StringVarP(&target, "target", "t", "", "Group name (default \"default\", or $SA_TARGET)")
 	f.IntVarP(&port, "port", "p", DefaultPort, "Server port")
 	f.StringVarP(&bind, "bind", "b", "localhost", "Bind address")
 	f.StringVar(&hookCommand, "on-review", "", "Shell command to run when a review is submitted")
@@ -62,13 +62,13 @@ func init() {
 
 func runHook(cmd *cobra.Command, _ []string) error {
 	ctx := cmd.Context()
+	group, err := groupName(target)
+	if err != nil {
+		return err
+	}
 	c := client.New(addr(), 5*time.Second)
 	if _, err := c.Status(ctx); err != nil {
 		return fmt.Errorf("no sa server found on %s", c.Addr)
-	}
-	group, err := resolveGroup(ctx, c, target)
-	if err != nil {
-		return err
 	}
 
 	switch {
