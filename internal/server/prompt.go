@@ -55,17 +55,16 @@ func Prompt(g *model.Group, opts PromptOptions) string {
 			fence := fenceFor(snippet)
 			fmt.Fprintf(&b, "\n%s\n%s\n%s\n", fence, snippet, fence)
 		}
+		// The body is Markdown and may carry suggestion blocks, so it goes
+		// out as it is rather than quoted line by line.
 		if body := strings.TrimRight(c.Body, "\n"); body != "" {
-			b.WriteString("\n")
-			for _, line := range strings.Split(body, "\n") {
-				fmt.Fprintf(&b, "> %s\n", line)
-			}
+			fmt.Fprintf(&b, "\n%s\n", body)
 		}
-		if suggestion := strings.TrimRight(c.Suggestion, "\n"); suggestion != "" {
-			// The lines above are to be replaced by exactly this.
-			fence := fenceFor(suggestion)
-			fmt.Fprintf(&b, "\nSuggested replacement for %s:\n\n%ssuggestion\n%s\n%s\n",
-				lineRangeText(c), fence, suggestion, fence)
+		if n := len(model.Suggestions(c.Body)); n > 0 {
+			fmt.Fprintf(&b, "\nThe suggestion block above replaces %s.\n", lineRangeText(c))
+			if n > 1 {
+				fmt.Fprintf(&b, "(%d suggestion blocks: apply them in order.)\n", n)
+			}
 		}
 	}
 

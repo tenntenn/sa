@@ -62,10 +62,11 @@ $ sa --shutdown        # stop the server
 - Select the lines to comment on by dragging over the line numbers, by
   shift-clicking, or - on a touch screen - by tapping one line and then
   another while the draft is open.
-- **Suggest a change** turns a comment into a proposed replacement for those
-  lines, pre-filled with what they say today. `sa comments` writes it as a
-  ` ```suggestion ` block naming the lines it replaces, so an agent can apply
-  it verbatim.
+- **Suggest a change** drops a ` ```suggestion ` block into the comment,
+  pre-filled with the lines as they read today — the same shape GitHub uses.
+  It renders as a small diff (the lines now, the lines as proposed) and
+  travels through `sa comments` as the fenced block itself, so an agent can
+  apply it verbatim. A comment can carry prose, several suggestions, or both.
 - Comments can be resolved, edited and deleted, and they survive a reload.
 - **Copy prompt** puts every open comment on the clipboard, ready for a coding
   agent.
@@ -97,6 +98,9 @@ $ sa comment internal/server/server.go:120 -m "Should this be a 404?" --author c
 $ sa comment README.md:12-18 -m "Reworded" --suggest-file new.md --author claude
 $ cat new.txt | sa comment main.go:42 -m "Simpler" --suggest -
 ```
+
+`--suggest` appends the replacement to the comment as a ` ```suggestion `
+block; the same block can be typed straight into `-m`.
 
 The lines are the ones the diff shows (`--side old` for a removed line), the
 file is looked up in the newest diff carrying that path, and sa fills in the

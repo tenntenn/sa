@@ -85,6 +85,12 @@ sa comment <path>:<line> -m "<question or note>" --author <you> --target <topic>
 sa comment <path>:<line>-<line> -m "..." --suggest "<replacement>" --author <you>
 ```
 
+`--suggest` appends the replacement to the comment as a ` ```suggestion `
+block, so the human sees it as a proposed change and can copy it:
+
+```
+```
+
 Use it for what is genuinely worth a human's attention — a decision you had
 to guess at, a trade-off, something you could not verify. A comment on every
 change is noise, not a review.
@@ -103,15 +109,17 @@ sa comments --target <topic> --format json
 ```
 
 Every JSON entry has `id`, `path`, `author`, `side` (`new` or `old`),
-`startLine`, `endLine`, `body`, `snippet`, `suggestion` and `resolved`. Line
+`startLine`, `endLine`, `body`, `snippet`, `suggestions` and `resolved`. Line
 numbers refer to the side named by `side`. `author` is empty for the comments
 the human wrote in the browser and set for the ones posted from the command
 line — including your own, so skip those when working through the list.
 
-A comment may carry a suggested replacement. In the Markdown output it is a
-fenced ` ```suggestion ` block under a line naming the file and the lines it
-replaces; in JSON it is the `suggestion` field. Apply it verbatim to exactly
-those lines unless it is wrong, and say so if you do not.
+A comment may carry suggested replacements, written as fenced
+` ```suggestion ` blocks inside the comment itself, the same convention
+GitHub uses. The Markdown output prints the comment as it is and then names
+the lines the block replaces; in JSON they are the `suggestions` array. Apply
+each block verbatim to exactly those lines unless it is wrong, and say so if
+you do not.
 
 ### 5. Act on every comment
 

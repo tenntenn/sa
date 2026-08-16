@@ -334,9 +334,8 @@ func (s *Store) AddComment(c *model.Comment) (*model.Comment, error) {
 // CommentPatch carries the fields of a comment that can be edited. A nil
 // field is left alone.
 type CommentPatch struct {
-	Body       *string
-	Suggestion *string
-	Resolved   *bool
+	Body     *string
+	Resolved *bool
 }
 
 // UpdateComment edits a comment in place.
@@ -353,9 +352,6 @@ func (s *Store) UpdateComment(group, id string, patch CommentPatch) (*model.Comm
 		}
 		if patch.Body != nil {
 			c.Body = *patch.Body
-		}
-		if patch.Suggestion != nil {
-			c.Suggestion = *patch.Suggestion
 		}
 		if patch.Resolved != nil {
 			c.Resolved = *patch.Resolved

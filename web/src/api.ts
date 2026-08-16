@@ -57,13 +57,11 @@ export interface NewComment {
   endLine: number
   body: string
   snippet: string
-  suggestion?: string
 }
 
 /** CommentPatch is what can be edited on an existing comment. */
 export interface CommentPatch {
   body?: string
-  suggestion?: string
   resolved?: boolean
 }
 

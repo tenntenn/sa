@@ -946,17 +946,33 @@ a {
   color: var(--fg-muted);
 }
 
-.suggestion pre {
-  margin: 0;
-  padding: 8px;
-  background: var(--add-bg);
-  overflow-x: auto;
+.suggestion-diff {
+  width: 100%;
+  border-collapse: collapse;
   font-family: var(--mono);
   font-size: 12px;
   line-height: 1.55;
+  table-layout: fixed;
 }
 
-.suggestion-input {
+.suggestion-diff td {
+  padding: 0 6px;
+  vertical-align: top;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.suggestion-diff td.marker {
+  width: 18px;
+  color: var(--fg-muted);
+  user-select: none;
+}
+
+.suggestion-diff tr.delete td {
+  background: var(--del-bg);
+}
+
+.suggestion-diff tr.add td {
   background: var(--add-bg);
 }
 

@@ -51,6 +51,9 @@ diff shows; --side old comments on a removed line instead. The file is looked
 up in the newest diff of the group that carries that path, unless --diff
 names one. sa fills in the reviewed code itself.
 
+A suggestion is a fenced block inside the comment, the way GitHub writes one,
+so it can also be typed straight into -m.
+
 Many at once, for a whole self review:
 
   $ sa comment --json <<'EOF'
@@ -73,7 +76,8 @@ func init() {
 	f.IntVarP(&port, "port", "p", DefaultPort, "Server port")
 	f.StringVarP(&bind, "bind", "b", "localhost", "Bind address")
 	f.StringVarP(&commentBody, "message", "m", "", "Comment body")
-	f.StringVar(&commentSuggest, "suggest", "", `Suggested replacement for the lines ("-" reads stdin)`)
+	f.StringVar(&commentSuggest, "suggest", "",
+		`Suggested replacement, appended to the body as a "suggestion" block ("-" reads stdin)`)
 	f.StringVar(&commentSuggestFrom, "suggest-file", "", "Suggested replacement read from a file")
 	f.StringVar(&commentAuthor, "author", DefaultAuthor, "Who is commenting")
 	f.StringVar(&commentSide, "side", "new", "Side of the diff the lines belong to: new or old")

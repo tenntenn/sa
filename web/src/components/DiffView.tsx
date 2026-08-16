@@ -117,7 +117,7 @@ export function DiffView({ group, diff, file, comments, narrow = false, onChange
     extendTo(side, line)
   }
 
-  const submitComment = async (body: string, suggestion: string) => {
+  const submitComment = async (body: string) => {
     if (!selection) return
     await client.addComment(group, {
       diffId: diff.id,
@@ -128,7 +128,6 @@ export function DiffView({ group, diff, file, comments, narrow = false, onChange
       endLine: selection.end,
       body,
       snippet: snippetFor(file, selection),
-      suggestion: suggestion.trim() === '' ? undefined : suggestion,
     })
     setSelection(null)
     onChanged()

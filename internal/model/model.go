@@ -2,7 +2,11 @@
 // server and the sa web UI.
 package model
 
-import "time"
+import (
+	"encoding/json"
+	"strings"
+	"time"
+)
 
 // FileStatus represents how a file was changed in a diff.
 type FileStatus string
@@ -137,19 +141,104 @@ type Comment struct {
 	// numbers belong to.
 	Side string `json:"side"`
 	// StartLine and EndLine are inclusive 1-based line numbers on Side.
-	StartLine int    `json:"startLine"`
-	EndLine   int    `json:"endLine"`
-	Body      string `json:"body"`
+	StartLine int `json:"startLine"`
+	EndLine   int `json:"endLine"`
+	// Body is Markdown. Like on GitHub, a proposed replacement lives inside
+	// it as a fenced "suggestion" block, which is what makes it travel
+	// through a copied prompt unchanged.
+	Body string `json:"body"`
 	// Snippet is the reviewed code, kept so that the comment stays
 	// meaningful once it is exported as a prompt.
-	Snippet string `json:"snippet"`
-	// Suggestion is the replacement the reviewer proposes for the commented
-	// lines, empty when the comment only says something. It is what an agent
-	// can apply verbatim.
-	Suggestion string    `json:"suggestion,omitempty"`
-	Resolved   bool      `json:"resolved"`
-	CreatedAt  time.Time `json:"createdAt"`
-	UpdatedAt  time.Time `json:"updatedAt"`
+	Snippet   string    `json:"snippet"`
+	Resolved  bool      `json:"resolved"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+// Suggestions returns the replacements proposed inside a comment body.
+//
+// A suggestion is written the way GitHub writes one: a fenced block whose
+// info string is "suggestion". Everything between the fences replaces the
+// commented lines.
+func Suggestions(body string) []string {
+	var out []string
+	lines := strings.Split(body, "\n")
+	for i := 0; i < len(lines); i++ {
+		fence, ok := suggestionFence(lines[i])
+		if !ok {
+			continue
+		}
+		block := make([]string, 0, 4)
+		i++
+		for ; i < len(lines); i++ {
+			if closesFence(lines[i], fence) {
+				break
+			}
+			block = append(block, strings.TrimSuffix(lines[i], "\r"))
+		}
+		out = append(out, strings.Join(block, "\n"))
+	}
+	return out
+}
+
+// suggestionFence reports whether a line opens a suggestion block, and with
+// which fence.
+func suggestionFence(line string) (fence string, ok bool) {
+	trimmed := strings.TrimSpace(strings.TrimSuffix(line, "\r"))
+	for _, marker := range []byte{'`', '~'} {
+		n := 0
+		for n < len(trimmed) && trimmed[n] == marker {
+			n++
+		}
+		if n < 3 {
+			continue
+		}
+		if strings.EqualFold(strings.TrimSpace(trimmed[n:]), "suggestion") {
+			return trimmed[:n], true
+		}
+	}
+	return "", false
+}
+
+// closesFence reports whether a line closes a block opened with fence.
+func closesFence(line, fence string) bool {
+	trimmed := strings.TrimSpace(strings.TrimSuffix(line, "\r"))
+	if len(trimmed) < len(fence) {
+		return false
+	}
+	return strings.Trim(trimmed, fence[:1]) == "" && strings.HasPrefix(trimmed, fence)
+}
+
+// WithSuggestion appends a suggestion block to a comment body, which is how
+// a client that only has the replacement text - the sa command line - writes
+// one.
+func WithSuggestion(body, suggestion string) string {
+	suggestion = strings.TrimRight(suggestion, "\n")
+	if strings.TrimSpace(suggestion) == "" {
+		return body
+	}
+	fence := "```"
+	for strings.Contains(suggestion, fence) {
+		fence += "`"
+	}
+	block := fence + "suggestion\n" + suggestion + "\n" + fence
+	if strings.TrimSpace(body) == "" {
+		return block
+	}
+	return strings.TrimRight(body, "\n") + "\n\n" + block
+}
+
+// MarshalJSON adds the suggestions parsed out of the body, so that a client
+// does not have to know how they are written down.
+func (c *Comment) MarshalJSON() ([]byte, error) {
+	type comment Comment
+	return json.Marshal(struct {
+		*comment
+		Suggestions []string `json:"suggestions,omitempty"`
+	}{
+		comment:     (*comment)(c),
+		Suggestions: Suggestions(c.Body),
+	})
 }
 
 // Group is a named collection of diffs and their review comments, served

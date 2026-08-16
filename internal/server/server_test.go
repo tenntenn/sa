@@ -452,16 +452,17 @@ func TestSuggestionInPrompt(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status = %s", resp.Status)
 	}
-	// A suggestion is a complete comment on its own: no body needed.
-	if comment.Suggestion != "a better line\nand another" {
-		t.Fatalf("comment = %+v", comment)
+	// A suggestion is a complete comment on its own: no body needed, and it
+	// is stored inside the body as a fenced block, the way GitHub does it.
+	if got := model.Suggestions(comment.Body); len(got) != 1 || got[0] != "a better line\nand another" {
+		t.Fatalf("suggestions = %q (body %q)", got, comment.Body)
 	}
 
 	prompt := getText(t, ts.URL+"/_/api/groups/default/prompt")
 	if !strings.Contains(prompt, "```suggestion\na better line\nand another\n```") {
 		t.Errorf("prompt lacks an applicable suggestion block: %q", prompt)
 	}
-	if !strings.Contains(prompt, "Suggested replacement for README.md:2-3") {
+	if !strings.Contains(prompt, "replaces README.md:2-3") {
 		t.Errorf("prompt does not name the replaced lines: %q", prompt)
 	}
 }
@@ -504,7 +505,7 @@ func TestUpdateCommentSuggestion(t *testing.T) {
 
 	req, err := http.NewRequest(http.MethodPatch,
 		ts.URL+"/_/api/groups/default/comments/"+comment.ID,
-		strings.NewReader(`{"suggestion":"replaced"}`))
+		strings.NewReader("{\"body\":\"hmm\\n\\n```suggestion\\nreplaced\\n```\"}"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -517,8 +518,11 @@ func TestUpdateCommentSuggestion(t *testing.T) {
 	if err := json.NewDecoder(res.Body).Decode(&updated); err != nil {
 		t.Fatal(err)
 	}
-	if updated.Suggestion != "replaced" || updated.Body != "hmm" {
-		t.Errorf("updated = %+v, want the suggestion added and the body kept", updated)
+	if got := model.Suggestions(updated.Body); len(got) != 1 || got[0] != "replaced" {
+		t.Errorf("updated body = %q, want a suggestion block in it", updated.Body)
+	}
+	if !strings.HasPrefix(updated.Body, "hmm") {
+		t.Errorf("updated body = %q, want the prose kept", updated.Body)
 	}
 }
 

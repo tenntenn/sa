@@ -2,6 +2,7 @@ import * as api from './api'
 import type { Comment, Diff, Status } from './types'
 import { renderMarkdown } from './markdown'
 import { buildPrompt } from './prompt'
+import { suggestions } from './suggestion'
 
 /** PreviewResult is either an embedded mo page or Markdown rendered here. */
 export type PreviewResult =
@@ -162,7 +163,7 @@ function createStaticClient(data: StaticPayload): SaClient {
         endLine: comment.endLine,
         body: comment.body,
         snippet: comment.snippet,
-        suggestion: comment.suggestion,
+        suggestions: suggestions(comment.body),
         resolved: false,
         createdAt: now,
         updatedAt: now,
@@ -176,7 +177,7 @@ function createStaticClient(data: StaticPayload): SaClient {
             ? {
                 ...c,
                 body: patch.body ?? c.body,
-                suggestion: patch.suggestion ?? c.suggestion,
+                suggestions: suggestions(patch.body ?? c.body),
                 resolved: patch.resolved ?? c.resolved,
                 updatedAt: new Date().toISOString(),
               }

@@ -1,4 +1,5 @@
 import type { Comment, Diff } from './types'
+import { suggestions } from './suggestion'
 
 /**
  * buildPrompt renders review comments the same way the sa server does, so an
@@ -30,22 +31,16 @@ export function buildPrompt(
       const fence = fenceFor(snippet)
       lines.push('', fence, snippet, fence)
     }
+    // The body is Markdown and may carry suggestion blocks, so it goes out
+    // as it is rather than quoted line by line.
     const body = c.body.replace(/\n+$/, '')
-    if (body) {
-      lines.push('')
-      for (const line of body.split('\n')) lines.push(`> ${line}`)
-    }
-    const suggestion = (c.suggestion ?? '').replace(/\n+$/, '')
-    if (suggestion) {
-      const fence = fenceFor(suggestion)
-      lines.push(
-        '',
-        `Suggested replacement for ${c.path}${lineRange(c)}:`,
-        '',
-        `${fence}suggestion`,
-        suggestion,
-        fence,
-      )
+    if (body) lines.push('', body)
+    const blocks = suggestions(c.body)
+    if (blocks.length > 0) {
+      lines.push('', `The suggestion block above replaces ${c.path}${lineRange(c)}.`)
+      if (blocks.length > 1) {
+        lines.push(`(${blocks.length} suggestion blocks: apply them in order.)`)
+      }
     }
   })
 

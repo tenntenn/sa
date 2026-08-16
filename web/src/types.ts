@@ -57,10 +57,12 @@ export interface Comment {
   side: 'new' | 'old'
   startLine: number
   endLine: number
+  /** body is Markdown; a proposed replacement is a fenced "suggestion"
+   * block inside it, as on GitHub. */
   body: string
   snippet: string
-  /** suggestion is the replacement proposed for the commented lines. */
-  suggestion?: string
+  /** suggestions are the replacement blocks the server parsed out of body. */
+  suggestions?: string[]
   resolved: boolean
   createdAt: string
   updatedAt: string
