@@ -16,9 +16,9 @@ import (
 )
 
 var (
-	reviewsSince  string
-	reviewsLimit  int
-	reviewsFormat string
+	reviewsSince    string
+	reviewsLimit    int
+	reviewsFormat   string
 	reviewsStats    bool
 	reviewsAll      bool
 	reviewsTop      int
@@ -138,19 +138,26 @@ func runReviews(cmd *cobra.Command, _ []string) error {
 }
 
 // loadReviews reads the reviews: from stdin, from the log the flags point
-// at, or - when that one is empty - from the running server, which may be
-// keeping them somewhere this invocation was not told about.
+// at, or - when nothing was pointed at and the usual log has nothing to say
+// - from the running server, which may be keeping them somewhere this
+// invocation was not told about.
+//
+// A log named with --file is read and nothing else is: answering a question
+// about someone else's log with this machine's reviews would be a lie, and
+// a quiet one.
 func loadReviews(cmd *cobra.Command, filter history.Filter) ([]history.Record, error) {
 	if reviewsFile == "-" {
 		return history.Read(cmd.InOrStdin(), filter)
 	}
-	path := reviewsFile
-	if path == "" {
-		resolved, err := historyFile(historyPath)
-		if err != nil {
-			return nil, err
+	if reviewsFile != "" {
+		if _, err := os.Stat(reviewsFile); err != nil {
+			return nil, fmt.Errorf("cannot read the log %s: %w", reviewsFile, err)
 		}
-		path = resolved
+		return history.Load(reviewsFile, filter)
+	}
+	path, err := historyFile(historyPath)
+	if err != nil {
+		return nil, err
 	}
 	if path != "" {
 		records, err := history.Load(path, filter)

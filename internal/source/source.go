@@ -8,6 +8,7 @@ package source
 import (
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/tenntenn/sa/internal/diff"
 	"github.com/tenntenn/sa/internal/model"
@@ -48,16 +49,40 @@ func NewSide(baseDir string, f *model.File) Result {
 	return Result{Content: content, Kind: FromDiff, Complete: complete}
 }
 
-// AbsPath resolves a diff path against the directory the diff was sent from.
+// AbsPath resolves a diff path against the directory the diff was sent
+// from, and returns "" for anything that lands outside it.
+//
+// The paths come out of the diff text, which sa did not write and does not
+// vouch for: a patch someone mailed over can name ../../.ssh/id_rsa as
+// happily as it names a file of the project. What is read from disk here is
+// shown in the preview and baked into an exported page, so a path that
+// leaves the directory the diff was sent from is refused and rebuilt from
+// the diff instead.
 func AbsPath(baseDir, rel string) string {
-	if rel == "" {
+	if rel == "" || baseDir == "" {
 		return ""
 	}
+	base := filepath.Clean(baseDir)
+	var abs string
 	if filepath.IsAbs(rel) {
-		return filepath.Clean(rel)
+		abs = filepath.Clean(rel)
+	} else {
+		abs = filepath.Clean(filepath.Join(base, filepath.FromSlash(rel)))
 	}
-	if baseDir == "" {
+	if !within(base, abs) {
 		return ""
 	}
-	return filepath.Clean(filepath.Join(baseDir, filepath.FromSlash(rel)))
+	return abs
+}
+
+// within reports whether path is base itself or something under it.
+func within(base, path string) bool {
+	rel, err := filepath.Rel(base, path)
+	if err != nil {
+		return false
+	}
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return false
+	}
+	return !filepath.IsAbs(rel)
 }

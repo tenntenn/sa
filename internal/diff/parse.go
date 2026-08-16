@@ -60,9 +60,15 @@ type parser struct {
 	// git reports whether the current file entry came from a "diff --git"
 	// header, which tells us the a/ and b/ prefixes are synthetic.
 	git bool
-	// pathsSet reports whether the paths of the current file entry are
-	// already known, so that a second "--- / +++" pair starts a new file.
-	pathsSet bool
+	// headersRead reports whether the current file entry has already
+	// consumed a "--- / +++" pair, so that a second one starts a new file.
+	// A plain diff of several files is nothing but such pairs.
+	headersRead bool
+	// pathsKnown reports whether the paths were taken from a rename or copy
+	// header, which are the real ones: the "--- / +++" pair of the same
+	// entry must not overwrite them, but it does not start a new file
+	// either.
+	pathsKnown bool
 }
 
 func (p *parser) run() {
@@ -74,13 +80,15 @@ func (p *parser) run() {
 			p.i++
 		case strings.HasPrefix(line, "diff --cc ") || strings.HasPrefix(line, "diff --combined "):
 			// Combined diff of a merge commit. Line numbers are ambiguous, so
-			// the content is shown without them.
-			name := strings.TrimSpace(line[strings.Index(line, " --")+len(" --cc "):])
+			// the content is shown without them. The two spellings are not the
+			// same length, so each is trimmed as itself.
+			name := strings.TrimPrefix(line, "diff --cc ")
+			name = strings.TrimSpace(strings.TrimPrefix(name, "diff --combined "))
 			p.push(&model.File{OldPath: name, NewPath: name, Status: model.StatusModified})
 			p.git = true
 			p.i++
 		case strings.HasPrefix(line, "--- ") && p.i+1 < len(p.lines) && strings.HasPrefix(p.lines[p.i+1], "+++ "):
-			if p.current() == nil || len(p.current().Hunks) > 0 || p.pathsSet {
+			if p.current() == nil || len(p.current().Hunks) > 0 || p.headersRead {
 				p.push(&model.File{})
 				p.git = false
 			}
@@ -115,7 +123,8 @@ func (p *parser) file() *model.File {
 
 func (p *parser) push(f *model.File) {
 	p.files = append(p.files, f)
-	p.pathsSet = false
+	p.headersRead = false
+	p.pathsKnown = false
 }
 
 func (p *parser) startGitFile(rest string) {
@@ -155,25 +164,25 @@ func (p *parser) readExtendedHeader(line string) bool {
 		if f != nil {
 			f.Status = model.StatusRenamed
 			f.OldPath = unquotePath(strings.TrimPrefix(line, "rename from "))
-			p.pathsSet = true
+			p.pathsKnown = true
 		}
 	case strings.HasPrefix(line, "rename to "):
 		if f != nil {
 			f.Status = model.StatusRenamed
 			f.NewPath = unquotePath(strings.TrimPrefix(line, "rename to "))
-			p.pathsSet = true
+			p.pathsKnown = true
 		}
 	case strings.HasPrefix(line, "copy from "):
 		if f != nil {
 			f.Status = model.StatusCopied
 			f.OldPath = unquotePath(strings.TrimPrefix(line, "copy from "))
-			p.pathsSet = true
+			p.pathsKnown = true
 		}
 	case strings.HasPrefix(line, "copy to "):
 		if f != nil {
 			f.Status = model.StatusCopied
 			f.NewPath = unquotePath(strings.TrimPrefix(line, "copy to "))
-			p.pathsSet = true
+			p.pathsKnown = true
 		}
 	case strings.HasPrefix(line, "index "):
 		if f != nil {
@@ -202,7 +211,7 @@ func (p *parser) readFileHeaders() {
 	new := normalizePath(newRaw, strip)
 
 	// rename/copy headers already recorded the real paths.
-	if !p.pathsSet {
+	if !p.pathsKnown {
 		if old != "" {
 			f.OldPath = old
 		}
@@ -218,7 +227,7 @@ func (p *parser) readFileHeaders() {
 		f.Status = model.StatusDeleted
 		f.NewPath = ""
 	}
-	p.pathsSet = true
+	p.headersRead = true
 }
 
 func (p *parser) readHunk() {

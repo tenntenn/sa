@@ -1,6 +1,7 @@
 package diff_test
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -314,4 +315,100 @@ func TestParseEmpty(t *testing.T) {
 	if files := diff.Parse(""); len(files) != 0 {
 		t.Errorf("got %d files, want 0", len(files))
 	}
+}
+
+// A rename with edits is one file, not two: the rename headers name it and
+// the "--- / +++" pair that follows belongs to the same entry.
+func TestParseRenameWithEditsIsOneFile(t *testing.T) {
+	src := `diff --git a/old.txt b/new.txt
+similarity index 80%
+rename from old.txt
+rename to new.txt
+index 1234567..89abcde 100644
+--- a/old.txt
++++ b/new.txt
+@@ -1,2 +1,2 @@
+ keep
+-was
++now
+`
+	files := diff.Parse(src)
+	if len(files) != 1 {
+		t.Fatalf("got %d file(s), want 1:\n%s", len(files), describe(files))
+	}
+	f := files[0]
+	if f.Status != model.StatusRenamed || f.OldPath != "old.txt" || f.NewPath != "new.txt" {
+		t.Errorf("file = %s %q -> %q", f.Status, f.OldPath, f.NewPath)
+	}
+	if len(f.Hunks) != 1 {
+		t.Fatalf("the edits went missing: %d hunk(s)", len(f.Hunks))
+	}
+	if f.Additions != 1 || f.Deletions != 1 {
+		t.Errorf("stats = +%d -%d", f.Additions, f.Deletions)
+	}
+}
+
+// A copy with edits has the same shape as a rename.
+func TestParseCopyWithEditsIsOneFile(t *testing.T) {
+	src := `diff --git a/src.txt b/copy.txt
+similarity index 90%
+copy from src.txt
+copy to copy.txt
+--- a/src.txt
++++ b/copy.txt
+@@ -1 +1 @@
+-old
++new
+`
+	files := diff.Parse(src)
+	if len(files) != 1 {
+		t.Fatalf("got %d file(s), want 1:\n%s", len(files), describe(files))
+	}
+	if files[0].Status != model.StatusCopied || files[0].NewPath != "copy.txt" || len(files[0].Hunks) != 1 {
+		t.Errorf("file = %+v", files[0])
+	}
+}
+
+// A plain diff of several files still splits on every "--- / +++" pair,
+// which is the only thing separating them.
+func TestParsePlainDiffStillSplitsOnHeaders(t *testing.T) {
+	src := `--- a.txt	2026-08-16 10:00:00
++++ a.txt	2026-08-16 10:01:00
+@@ -1 +1 @@
+-a
++A
+--- b.txt	2026-08-16 10:00:00
++++ b.txt	2026-08-16 10:01:00
+@@ -1 +1 @@
+-b
++B
+`
+	files := diff.Parse(src)
+	if len(files) != 2 {
+		t.Fatalf("got %d file(s), want 2:\n%s", len(files), describe(files))
+	}
+	if files[0].NewPath != "a.txt" || files[1].NewPath != "b.txt" {
+		t.Errorf("paths = %q, %q", files[0].NewPath, files[1].NewPath)
+	}
+}
+
+// "diff --combined" is longer than "diff --cc"; both name the file.
+func TestParseCombinedHeaderSpellings(t *testing.T) {
+	for _, header := range []string{"diff --cc merged.txt", "diff --combined merged.txt"} {
+		files := diff.Parse(header + `
+@@@ -1,1 -1,1 +1,1 @@@
+++merged
+`)
+		if len(files) != 1 || files[0].NewPath != "merged.txt" {
+			t.Errorf("%q gave %s", header, describe(files))
+		}
+	}
+}
+
+func describe(files []*model.File) string {
+	var b strings.Builder
+	for i, f := range files {
+		fmt.Fprintf(&b, "  [%d] %s %q -> %q, %d hunk(s)\n", i, f.Status, f.OldPath, f.NewPath, len(f.Hunks))
+	}
+	return b.String()
 }

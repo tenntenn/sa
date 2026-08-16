@@ -5,9 +5,11 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -773,5 +775,72 @@ func TestClosingEveryReview(t *testing.T) {
 	getJSON(t, ts.URL+"/_/api/status", &st)
 	if len(st.Groups) != 0 {
 		t.Errorf("groups = %+v, want none left", st.Groups)
+	}
+}
+
+// sa listens on loopback without authentication, so any page the user has
+// open can reach it. A hook is a shell command sa runs, which makes a POST
+// from another site code execution; the guard is what stands between the
+// two, and reads have to keep working for the CLI.
+func TestCrossOriginRequestsAreRefused(t *testing.T) {
+	ts, srv := newTestServer(t)
+	// The guard compares ports with the one sa was configured with, which
+	// httptest picks for us.
+	u, err := url.Parse(ts.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv.opts.Port, err = strconv.Atoi(u.Port())
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv.opts.Bind = u.Hostname()
+
+	hooks := ts.URL + "/_/api/groups/default/hooks"
+	cases := []struct {
+		name    string
+		method  string
+		url     string
+		headers map[string]string
+		want    int
+	}{
+		{"a page on another site, as a simple request", http.MethodPost, hooks,
+			map[string]string{"Origin": "https://evil.example", "Content-Type": "text/plain"}, http.StatusForbidden},
+		{"a page on another site, named by the browser", http.MethodPost, hooks,
+			map[string]string{"Sec-Fetch-Site": "cross-site"}, http.StatusForbidden},
+		{"another port on this machine", http.MethodPost, hooks,
+			map[string]string{"Origin": "http://localhost:1"}, http.StatusForbidden},
+		{"a sandboxed page, which sends Origin: null", http.MethodPost, hooks,
+			map[string]string{"Origin": "null"}, http.StatusForbidden},
+		{"shutting the server down from another site", http.MethodPost, ts.URL + "/_/api/shutdown",
+			map[string]string{"Origin": "https://evil.example"}, http.StatusForbidden},
+		{"sa's own page", http.MethodPost, hooks,
+			map[string]string{"Origin": ts.URL, "Sec-Fetch-Site": "same-origin"}, http.StatusOK},
+		{"sa's own page under another loopback name", http.MethodPost, hooks,
+			map[string]string{"Origin": "http://127.0.0.1:" + u.Port()}, http.StatusOK},
+		{"the command line, which names no origin", http.MethodPost, hooks, nil, http.StatusOK},
+		{"reading, which CORS already guards", http.MethodGet, ts.URL + "/_/api/status",
+			map[string]string{"Origin": "https://evil.example"}, http.StatusOK},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			req, err := http.NewRequest(tc.method, tc.url, strings.NewReader(`{"command":"echo hi"}`))
+			if err != nil {
+				t.Fatal(err)
+			}
+			req.Header.Set("Content-Type", "application/json")
+			for k, v := range tc.headers {
+				req.Header.Set(k, v)
+			}
+			resp, err := ts.Client().Do(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer resp.Body.Close()
+			if resp.StatusCode != tc.want {
+				body, _ := io.ReadAll(resp.Body)
+				t.Errorf("status = %d, want %d: %s", resp.StatusCode, tc.want, body)
+			}
+		})
 	}
 }

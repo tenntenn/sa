@@ -11,6 +11,8 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/netip"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -196,8 +198,72 @@ func (s *Server) withSecurityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Security-Policy", csp)
 		w.Header().Set("X-Content-Type-Options", "nosniff")
+		if reason, ok := s.crossOrigin(r); ok {
+			// A page on some other site asked sa to change something. It
+			// is not the person sitting here, whatever it says.
+			slog.Warn("refused a cross-origin request", "reason", reason,
+				"method", r.Method, "path", r.URL.Path)
+			http.Error(w, "sa only takes changes from its own page or from the command line",
+				http.StatusForbidden)
+			return
+		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// crossOrigin reports whether a state-changing request came from somewhere
+// other than sa's own page, and why.
+//
+// sa listens on loopback with no authentication, which any website the user
+// visits can reach: a POST from a page on evil.example would otherwise
+// register a hook, and a hook is a shell command sa runs. Browsers name
+// their sender - Origin, and Sec-Fetch-Site on top of it - and the command
+// line sends neither, which is the whole distinction.
+func (s *Server) crossOrigin(r *http.Request) (string, bool) {
+	switch r.Method {
+	case http.MethodGet, http.MethodHead, http.MethodOptions:
+		// Reading is guarded by the browser: without CORS headers no other
+		// site gets to see the answer.
+		return "", false
+	}
+	// Sec-Fetch-Site is sent by every current browser and by nothing else.
+	// "none" is the address bar, "same-origin" is sa's own page.
+	switch site := r.Header.Get("Sec-Fetch-Site"); site {
+	case "", "none", "same-origin":
+	default:
+		return "Sec-Fetch-Site: " + site, true
+	}
+	origin := r.Header.Get("Origin")
+	if origin == "" || origin == "null" {
+		// No browser is claiming this request. curl, the sa command and the
+		// hooks it runs all land here.
+		return "", origin == "null"
+	}
+	if !s.ownOrigin(origin) {
+		return "Origin: " + origin, true
+	}
+	return "", false
+}
+
+// ownOrigin reports whether an Origin header names this server. The page is
+// reached by whichever loopback name the user typed, so all of them count,
+// as long as the port is the one sa listens on.
+func (s *Server) ownOrigin(origin string) bool {
+	u, err := url.Parse(origin)
+	if err != nil || u.Scheme != "http" {
+		return false
+	}
+	if u.Port() != strconv.Itoa(s.opts.Port) {
+		return false
+	}
+	host := u.Hostname()
+	if host == s.opts.Bind {
+		return true
+	}
+	if ip, err := netip.ParseAddr(host); err == nil {
+		return ip.IsLoopback()
+	}
+	return host == "localhost"
 }
 
 // Status is the payload of GET /_/api/status.
