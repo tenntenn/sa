@@ -387,6 +387,10 @@ type AddDiffRequest struct {
 	Content string `json:"content"`
 	// Labels are carried through to the review record untouched.
 	Labels map[string]string `json:"labels,omitempty"`
+	// Collapse names files the sender wants folded away - its generated
+	// ones, whatever those are called here. sa matches the patterns and
+	// reads nothing into them.
+	Collapse []string `json:"collapse,omitempty"`
 }
 
 // AddDiffResponse is the answer to a stored diff.
@@ -415,13 +419,15 @@ func (s *Server) handleAddDiff(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "no file diff found in the input", http.StatusBadRequest)
 		return
 	}
-	d := s.store.AddDiff(name, &model.Diff{
+	incoming := &model.Diff{
 		Title:   req.Title,
 		BaseDir: req.BaseDir,
 		Labels:  req.Labels,
 		Raw:     req.Content,
 		Files:   files,
-	})
+	}
+	foldFiles(incoming, req.Collapse)
+	d := s.store.AddDiff(name, incoming)
 	s.notify(name)
 	writeJSON(w, http.StatusOK, AddDiffResponse{
 		Group: name,

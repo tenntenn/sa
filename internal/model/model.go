@@ -78,6 +78,13 @@ type File struct {
 	Deletions int        `json:"deletions"`
 	// ViewMode is the rendering mode the UI should default to.
 	ViewMode ViewMode `json:"viewMode"`
+	// Folded asks the page to keep this file shut until the reader opens
+	// it. Nothing is hidden by it: the file, its counts and its comments
+	// stay where they are.
+	Folded bool `json:"folded,omitempty"`
+	// FoldReason says why, in words the reader can check and disagree
+	// with. sa never folds a file it cannot give a reason for.
+	FoldReason string `json:"foldReason,omitempty"`
 	// IsMarkdown reports whether the file can be previewed with mo.
 	IsMarkdown bool    `json:"isMarkdown"`
 	Hunks      []*Hunk `json:"hunks"`

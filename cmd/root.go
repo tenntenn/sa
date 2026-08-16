@@ -50,6 +50,7 @@ var (
 	onReviewURL     string
 	historyPath     string
 	labelFlags      []string
+	collapseFlags   []string
 )
 
 var rootCmd = &cobra.Command{
@@ -165,6 +166,8 @@ func init() {
 	f.StringVar(&title, "title", "", "Title of the diff (defaults to a generated name)")
 	f.StringArrayVar(&labelFlags, "label", nil,
 		"key=value kept with the diff, repeatable; sa stores it and reads nothing into it")
+	f.StringArrayVar(&collapseFlags, "collapse", nil,
+		"Fold files matching this pattern, repeatable (gitignore-style: go.sum, web/dist/**)")
 	f.BoolVar(&openBrowser, "open", false, "Always open the browser")
 	f.BoolVar(&noOpen, "no-open", false, "Never open the browser")
 	rootCmd.MarkFlagsMutuallyExclusive("open", "no-open")
@@ -242,10 +245,11 @@ func run(cmd *cobra.Command, _ []string) error {
 	out := serveOutput{URL: server.GroupURL(c.BaseURL(), group), Group: group}
 	if content != "" {
 		res, err := c.AddDiff(ctx, group, server.AddDiffRequest{
-			Title:   title,
-			BaseDir: workingDir(),
-			Content: content,
-			Labels:  labels,
+			Title:    title,
+			BaseDir:  workingDir(),
+			Content:  content,
+			Labels:   labels,
+			Collapse: splitPatterns(collapseFlags),
 		})
 		if err != nil {
 			return err
@@ -429,6 +433,20 @@ func parseLabels(flags []string) (map[string]string, error) {
 		labels[key] = value
 	}
 	return labels, nil
+}
+
+// splitPatterns lets one --collapse carry a list, so that a shell can hand
+// over whatever produced it without a loop.
+func splitPatterns(flags []string) []string {
+	out := make([]string, 0, len(flags))
+	for _, flag := range flags {
+		for _, p := range strings.FieldsFunc(flag, func(r rune) bool { return r == ',' || r == '\n' }) {
+			if p = strings.TrimSpace(p); p != "" {
+				out = append(out, p)
+			}
+		}
+	}
+	return out
 }
 
 func workingDir() string {

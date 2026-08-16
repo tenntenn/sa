@@ -58,16 +58,24 @@ export function Sidebar({
             {diff.files.map((file) => {
               const active = selected?.diffId === diff.id && selected.fileId === file.id
               const count = commentCount(diff.id, file.id)
+              // A folded file is still listed - the point is that it is out
+              // of the way, not out of sight.
+              const folded = Boolean(file.folded) && count === 0
               return (
                 <li key={file.id}>
                   <button
-                    className={`file-item${active ? ' active' : ''}`}
+                    className={`file-item${active ? ' active' : ''}${folded ? ' folded' : ''}`}
                     onClick={() => onSelect(diff.id, file.id)}
                   >
                     <span className={`dot status-${file.status}`} title={file.status} />
                     <span className="file-path" title={filePath(file)}>
                       {filePath(file)}
                     </span>
+                    {folded && (
+                      <span className="badge sm" title={file.foldReason}>
+                        folded
+                      </span>
+                    )}
                     {file.isMarkdown && <span className="badge sm" title="Previewable with mo">md</span>}
                     {count > 0 && <span className="badge sm warn">{count}</span>}
                     <span className="stat add">+{file.additions}</span>

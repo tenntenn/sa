@@ -87,6 +87,35 @@ sa prints the review URL and returns immediately; the server keeps running in
 the background. Running `sa` again adds another diff to the same page rather
 than starting a second server.
 
+**Fold away what nobody reads line by line.** A diff that arrives with a
+lock file and a directory of build output in it costs the human attention
+before they reach the change you want looked at. You know which files those
+are — you produced the diff — so say so, with `--collapse`:
+
+```
+git diff | sa --target <topic> --collapse 'go.sum' --collapse 'web/dist/**'
+```
+
+Patterns work like .gitignore: a name without a slash matches at any depth,
+`**` stands for any run of directories, and one `--collapse` can carry a
+comma-separated list. In a git repository the list can come from the
+repository itself, which beats you guessing at it:
+
+```
+git diff | sa --collapse "$(git ls-files ':(attr:linguist-generated)' | paste -sd,)"
+```
+
+sa folds one more kind of file on its own: one that declares itself
+generated, in a `DO NOT EDIT` or `@generated` line its generator wrote. That
+is the file speaking, not sa inferring, and the page says which line it
+found. Nothing is folded on size, path or extension — a file folded for a
+bad reason is a file nobody reads.
+
+Folding hides nothing. A folded file keeps its place in the list and its
+counts, opens with one click, and is never folded while it carries a
+comment. So `--collapse` is for noise, never for a file you would rather
+not have looked at.
+
 Use `--json` when you want to parse the result:
 
 ```
@@ -319,6 +348,7 @@ them correct it.
 | `<diff producer> \| sa` | Add a diff to the default group and print its URL |
 | `... \| sa -t <name>` | Add it to a named group (its own URL and comments) |
 | `... \| sa --title "..."` | Give the diff a title shown in the UI |
+| `... \| sa --collapse '<glob>'` | Fold generated files away, repeatable |
 | `... \| sa --no-open` | Do not open a browser (useful in headless runs) |
 | `sa comment <path>:<line> -m "..."` | Leave a comment of your own (pass `--author`) |
 | `sa comment --json` | Post many comments at once, read from stdin |

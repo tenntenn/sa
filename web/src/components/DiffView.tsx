@@ -54,6 +54,11 @@ export function DiffView({ group, diff, file, comments, narrow = false, onChange
   const locked = narrow || file.status === 'added' || file.status === 'deleted' || file.isBinary
   const [viewMode, setViewMode] = useState<ViewMode>(file.viewMode)
   const [selection, setSelection] = useState<Selection | null>(null)
+  // A folded file is shut, not hidden: it keeps its place, its counts and
+  // its reason, and one click opens it. A file carrying comments is never
+  // shut - a review that hides a comment is worse than a long page.
+  const [shut, setShut] = useState<boolean | null>(null)
+  const folded = (shut ?? Boolean(file.folded)) && comments.length === 0
   const mode: ViewMode = locked ? 'unified' : viewMode
 
   const commentsByAnchor = useMemo(() => {
@@ -192,6 +197,11 @@ export function DiffView({ group, diff, file, comments, narrow = false, onChange
           <span className="stat del">-{file.deletions}</span>
         </div>
         <div className="diff-tools">
+          {!folded && (
+            <button className="ghost" onClick={() => setShut(true)} title="Fold this file away">
+              fold
+            </button>
+          )}
           {locked ? (
             <span
               className="hint"
@@ -222,7 +232,14 @@ export function DiffView({ group, diff, file, comments, narrow = false, onChange
         </div>
       </div>
 
-      {file.isBinary ? (
+      {folded ? (
+        <div className="folded">
+          <p className="empty">Folded — {file.foldReason || 'the sender asked for it'}</p>
+          <button className="ghost" onClick={() => setShut(false)}>
+            Show {file.additions + file.deletions} changed line(s)
+          </button>
+        </div>
+      ) : file.isBinary ? (
         <p className="empty">Binary file — no diff to show.</p>
       ) : file.hunks.length === 0 ? (
         <p className="empty">

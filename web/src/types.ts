@@ -34,6 +34,10 @@ export interface FileDiff {
   deletions: number
   viewMode: ViewMode
   isMarkdown: boolean
+  /** folded asks the page to keep the file shut until the reader opens it. */
+  folded?: boolean
+  /** foldReason says why it is shut, so the reader can disagree. */
+  foldReason?: string
   hunks: Hunk[]
 }
 

@@ -1025,3 +1025,19 @@ a {
 .comment-actions .verdict:disabled {
   opacity: 0.6;
 }
+
+/* A folded file is out of the way, not out of sight: it keeps its row and
+   its counts, and only its name is dimmed. */
+.file-item.folded .file-path {
+  opacity: 0.6;
+}
+.folded {
+  padding: 1rem 1.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.folded .empty {
+  margin: 0;
+}
