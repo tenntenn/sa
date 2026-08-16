@@ -63,7 +63,9 @@ export function App() {
   const [reviewNote, setReviewNote] = useState<string | null>(null)
   const [sidebarWidth, setSidebarWidth] = useState(storedSidebarWidth)
   const [theme, setTheme] = useState<Theme>(storedTheme)
+  const [query, setQuery] = useState('')
   const bodyRef = useRef<HTMLDivElement>(null)
+  const searchRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     applyTheme(theme)
@@ -81,6 +83,26 @@ export function App() {
   }, [])
 
   const toggleSidebar = () => setSidebarWidth((w) => (w === 0 ? SIDEBAR_DEFAULT : 0))
+
+  // "/" jumps to the path filter, the way it does in a pager. It opens the
+  // file list first when it was put away, since there is nothing to filter
+  // otherwise, and it stays out of the way while anything else is being
+  // typed into.
+  useEffect(() => {
+    const focusSearch = (ev: KeyboardEvent) => {
+      if (ev.key !== '/' || ev.metaKey || ev.ctrlKey || ev.altKey) return
+      const target = ev.target as HTMLElement | null
+      if (target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))) {
+        return
+      }
+      ev.preventDefault()
+      setSidebarWidth((w) => (w === 0 ? SIDEBAR_DEFAULT : w))
+      if (narrow) setPane('files')
+      window.setTimeout(() => searchRef.current?.focus(), 0)
+    }
+    window.addEventListener('keydown', focusSearch)
+    return () => window.removeEventListener('keydown', focusSearch)
+  }, [narrow])
 
   useEffect(() => {
     writeSetting(SPLIT_KEY, String(splitRatio))
@@ -215,6 +237,9 @@ export function App() {
       selected={selected}
       onSelect={selectFile}
       onChanged={() => void reload()}
+      query={query}
+      onQuery={setQuery}
+      searchRef={searchRef}
     />
   )
 

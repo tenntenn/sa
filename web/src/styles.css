@@ -1041,3 +1041,35 @@ a {
 .folded .empty {
   margin: 0;
 }
+
+/* The path filter sits above the list and scrolls with nothing: it is how
+   you get to a file in a diff with forty of them. */
+.file-search {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  background: var(--bg-elevated, var(--bg));
+  z-index: 1;
+}
+.file-search-input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.3rem 0.5rem;
+  font: inherit;
+  font-size: 0.85rem;
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+.file-search-input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+.file-search .hint {
+  white-space: nowrap;
+}

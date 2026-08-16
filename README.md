@@ -95,6 +95,12 @@ $ sa comments -t default   # the flag still wins
   agent.
 - Split and unified views can be switched per file; new, deleted and binary
   files stay unified.
+- **Filter the file list by path.** Press `/` and type: every
+  whitespace-separated term has to appear somewhere in the path, so
+  `server go` and `internal/server` both find `internal/server/server.go`.
+  Enter opens the first path still standing, Escape clears. Nothing turns up
+  that does not contain what you typed — a list you are scanning is the wrong
+  place for clever matching.
 - Every pane is resizable and can be minimised away: drag the edge between
   two panes, double click it to reset (or to put the file list away), or use
   the **Files**, **Diff** and **Preview** switches in the header. Dragging an
