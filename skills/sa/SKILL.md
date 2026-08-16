@@ -243,8 +243,17 @@ Every submitted review is kept, which makes the reviewer's habits readable
 rather than guessed at:
 
 ```
-sa reviews --stats                # which files draw comments, how many per review
-sa reviews --since 30d --format json   # every comment, to read properly
+sa reviews --stats                     # which files draw comments, how many per review
+sa reviews --comments --since 30d      # one line per comment, to read properly
+```
+
+For any question `--stats` does not answer, `--comments` emits one record
+per comment — tab-separated text, or flat JSON lines with
+`--format jsonl` — and ordinary tools do the counting:
+
+```
+sa reviews --comments | cut -f3 | cut -d: -f1 | sort | uniq -c | sort -rn
+sa reviews --comments --format jsonl | jq -r 'select(.suggestions) | .path'
 ```
 
 Worth doing before you hand over a change of the same shape: if the last ten
@@ -274,6 +283,7 @@ them correct it.
 | `sa hook --on-review '<cmd>'` | Have the server run something when the review lands |
 | `sa hook [--clear]` | List or drop those hooks |
 | `sa reviews [--stats] [--since 7d]` | The reviews that were submitted, and what they say together |
+| `sa reviews --comments [--format jsonl]` | One record per comment, for sort/uniq/awk/jq |
 | `sa --shutdown` | Stop the server |
 | `... \| sa export <file>` | Write the review as one self-contained HTML page |
 | `... \| sa export --fragment <file>` | The same, body only, for embedding |

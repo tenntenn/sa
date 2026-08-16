@@ -130,8 +130,6 @@ type Filter struct {
 	Since time.Time
 	// Limit keeps only the newest n records; 0 keeps all of them.
 	Limit int
-	// Where keeps only the reviews whose labels match every pair.
-	Where map[string]string
 }
 
 // Load reads the log, oldest first, applying a filter.
@@ -168,9 +166,6 @@ func Read(r io.Reader, f Filter) ([]Record, error) {
 		if !f.Since.IsZero() && rec.ReviewedAt.Before(f.Since) {
 			continue
 		}
-		if !matches(rec, f.Where) {
-			continue
-		}
 		records = append(records, rec)
 	}
 	if err := scanner.Err(); err != nil {
@@ -182,48 +177,41 @@ func Read(r io.Reader, f Filter) ([]Record, error) {
 	return records, nil
 }
 
-// matches reports whether a record carries every label asked for.
-func matches(rec Record, where map[string]string) bool {
-	for k, want := range where {
-		if rec.Labels[k] != want {
-			return false
-		}
-	}
-	return true
+// CommentRecord is one comment standing on its own: what was said, plus as
+// much of the review it came from as it takes to make sense of it. A comment
+// is the thing worth counting, and counting is done by whatever the reader
+// pipes this into, so each one has to survive on a line by itself.
+type CommentRecord struct {
+	Group      string            `json:"group"`
+	ReviewedAt time.Time         `json:"reviewedAt"`
+	Labels     map[string]string `json:"labels,omitempty"`
+	Comment
 }
 
-// Bucket is a pile of reviews that share a label value.
-type Bucket struct {
-	Value   string   `json:"value"`
-	Records []Record `json:"-"`
-	Stats   Stats    `json:"stats"`
+// Extension is the kind of file the comment was left on, ".go" or "(none)".
+func (c CommentRecord) Extension() string {
+	return extension(c.Path)
 }
 
-// By splits reviews by the value of one label, so that a pattern can be read
-// per branch, per revision, per whatever was labelled. Reviews without the
-// label land under "(none)".
-func By(records []Record, key string) []Bucket {
-	order := make([]string, 0, 4)
-	buckets := map[string][]Record{}
+// Who wrote it, with the browser's unnamed comments credited to the
+// reviewer.
+func (c CommentRecord) Who() string {
+	return author(c.Author)
+}
+
+// Comments pulls every comment out of the reviews, in the order they were
+// reviewed.
+func Comments(records []Record) []CommentRecord {
+	out := make([]CommentRecord, 0, len(records))
 	for _, rec := range records {
-		value, ok := rec.Labels[key]
-		if !ok || value == "" {
-			value = "(none)"
+		for _, c := range rec.Comments {
+			out = append(out, CommentRecord{
+				Group:      rec.Group,
+				ReviewedAt: rec.ReviewedAt,
+				Labels:     rec.Labels,
+				Comment:    c,
+			})
 		}
-		if _, seen := buckets[value]; !seen {
-			order = append(order, value)
-		}
-		buckets[value] = append(buckets[value], rec)
-	}
-	sort.Slice(order, func(i, j int) bool {
-		if len(buckets[order[i]]) != len(buckets[order[j]]) {
-			return len(buckets[order[i]]) > len(buckets[order[j]])
-		}
-		return order[i] < order[j]
-	})
-	out := make([]Bucket, 0, len(order))
-	for _, value := range order {
-		out = append(out, Bucket{Value: value, Records: buckets[value], Stats: Summarize(buckets[value])})
 	}
 	return out
 }

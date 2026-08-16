@@ -57,6 +57,11 @@ func jsonEncoder(w io.Writer) *json.Encoder {
 	return enc
 }
 
+// lineEncoder writes one JSON object per line, which is what jsonl means.
+func lineEncoder(w io.Writer) *json.Encoder {
+	return json.NewEncoder(w)
+}
+
 func browserOpen(url string) error {
 	return browser.OpenURL(url)
 }

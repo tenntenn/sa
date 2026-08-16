@@ -16,10 +16,11 @@ var (
 	reviewsSince  string
 	reviewsLimit  int
 	reviewsFormat string
-	reviewsStats  bool
-	reviewsAll    bool
-	reviewsTop    int
-	reviewsFile   string
+	reviewsStats    bool
+	reviewsAll      bool
+	reviewsTop      int
+	reviewsFile     string
+	reviewsComments bool
 )
 
 var reviewsCmd = &cobra.Command{
@@ -38,17 +39,26 @@ year of reviews can be read as one thing.
   $ sa reviews --stats             # what they say together
   $ sa reviews --format json       # every comment, for your own analysis
 
+--comments turns the stream around: one record per comment instead of one
+per review, which is the shape counting tools want. The text form is
+tab-separated, the jsonl form is one flat object per line, so the analysis
+itself belongs to whatever you pipe it into:
+
+  $ sa reviews --comments | cut -f3 | sort | uniq -c | sort -rn
+  $ sa reviews --comments --format jsonl | jq -r 'select(.suggestions).path'
+
 The log is a JSON object per line, kept at ` + "`$XDG_STATE_HOME/sa/reviews.jsonl`" + `
 unless --history-file or $SA_HISTORY says otherwise, so jq and friends work
 on it directly and it can be read from anywhere:
 
-  $ SA_HISTORY=.sa/reviews.jsonl sa reviews    # a log kept with the project
   $ sa reviews --file team.jsonl               # someone else's
   $ cat */reviews.jsonl | sa reviews --file -  # several at once
 
-A record holds no absolute path and nothing about the machine that wrote it,
-so a log can be committed and read by anyone. Nothing leaves the machine on
-its own.`,
+Keep the log outside the working tree (the default is outside): a log inside
+the tree is appended to on every submit and would dirty the very diff it is
+a log of. A record holds no absolute path and nothing about the machine that
+wrote it, so a log reads the same wherever it ends up. Nothing leaves the
+machine on its own.`,
 	Args:         cobra.NoArgs,
 	RunE:         runReviews,
 	SilenceUsage: true,
@@ -64,6 +74,8 @@ func init() {
 	f.IntVar(&reviewsLimit, "limit", 0, "Keep only the newest n reviews")
 	f.StringVar(&reviewsFormat, "format", "text", "Output format: text, json or jsonl")
 	f.BoolVar(&reviewsStats, "stats", false, "Print what the reviews say together")
+	f.BoolVar(&reviewsComments, "comments", false, "One record per comment instead of one per review")
+	reviewsCmd.MarkFlagsMutuallyExclusive("comments", "stats")
 	f.BoolVar(&reviewsAll, "all", false, "Every group, ignoring --target and $SA_TARGET")
 	f.IntVar(&reviewsTop, "top", 5, "How many entries each tally shows")
 	f.BoolVar(&jsonOutput, "json", false, "Shorthand for --format json")
@@ -96,6 +108,9 @@ func runReviews(cmd *cobra.Command, _ []string) error {
 	if jsonOutput {
 		format = "json"
 	}
+	if reviewsComments {
+		return printCommentStream(history.Comments(records), format)
+	}
 	switch format {
 	case "json":
 		return jsonEncoder(os.Stdout).Encode(map[string]any{
@@ -103,7 +118,7 @@ func runReviews(cmd *cobra.Command, _ []string) error {
 			"stats":   history.Summarize(records),
 		})
 	case "jsonl":
-		enc := jsonEncoder(os.Stdout)
+		enc := lineEncoder(os.Stdout)
 		for _, rec := range records {
 			if err := enc.Encode(rec); err != nil {
 				return err
@@ -146,6 +161,48 @@ func loadReviews(cmd *cobra.Command, filter history.Filter) ([]history.Record, e
 		return nil, nil
 	}
 	return c.Reviews(cmd.Context(), filter)
+}
+
+// printCommentStream writes one record per comment: flat lines that sort,
+// cut, awk and jq can take from here.
+func printCommentStream(comments []history.CommentRecord, format string) error {
+	switch format {
+	case "json":
+		return jsonEncoder(os.Stdout).Encode(comments)
+	case "jsonl":
+		enc := lineEncoder(os.Stdout)
+		for _, c := range comments {
+			if err := enc.Encode(c); err != nil {
+				return err
+			}
+		}
+		return nil
+	case "text":
+		for _, c := range comments {
+			fmt.Printf("%s\t%s\t%s\t%s\t%s\n",
+				c.ReviewedAt.Local().Format("2006-01-02"),
+				c.Group,
+				lineRef(c),
+				c.Who(),
+				firstLine(c.Body))
+		}
+		return nil
+	default:
+		return fmt.Errorf("unknown format %q: use text, json or jsonl", format)
+	}
+}
+
+func lineRef(c history.CommentRecord) string {
+	if c.EndLine > c.StartLine {
+		return fmt.Sprintf("%s:%d-%d", c.Path, c.StartLine, c.EndLine)
+	}
+	return fmt.Sprintf("%s:%d", c.Path, c.StartLine)
+}
+
+// firstLine keeps a body to one field of one line.
+func firstLine(s string) string {
+	s, _, _ = strings.Cut(strings.TrimSpace(s), "\n")
+	return strings.ReplaceAll(s, "\t", " ")
 }
 
 func printReviews(records []history.Record) error {

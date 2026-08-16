@@ -202,7 +202,7 @@ yet — which is enough to gate whatever comes next:
 $ git diff | sa
 $ sa wait -q && git commit -m "..."      # commit once the review is clean
 $ sa comments -q || echo "still something to fix"
-$ sa reviews --format jsonl | jq -r '.comments[].path' | sort | uniq -c
+$ sa reviews --comments | cut -f3 | sort | uniq -c | sort -rn
 ```
 
 sa writes nothing into your working tree — the session, the log and the
@@ -220,7 +220,7 @@ $ sa reviews                     # one line each, newest last
 $ sa reviews --since 7d          # this week
 $ sa reviews -t api --limit 5
 $ sa reviews --stats             # what they say together
-$ sa reviews --format json       # every comment, for your own analysis
+$ sa reviews --comments          # one line per comment, for your own analysis
 ```
 
 ```
@@ -241,15 +241,43 @@ by author:
   claude                                   8
 ```
 
-The log is one JSON object per line at `$XDG_STATE_HOME/sa/reviews.jsonl`,
-so `jq` works on it directly and nothing about it is sa-shaped:
+The analysis itself is not sa's job. `--stats` answers the everyday
+questions, and for every other one sa hands the data to the tools that
+already answer questions about streams of records: `--comments` turns the
+log into one flat record per comment — tab-separated as text, one JSON
+object per line as jsonl — and what to count is up to the pipe:
+
+```console
+$ sa reviews --comments | cut -f3 | cut -d: -f1 | sort | uniq -c | sort -rn
+$ sa reviews --comments --format jsonl | jq -r 'select(.suggestions) | .path'
+$ sa reviews --comments --since 90d | awk -F'\t' '{print $4}' | sort | uniq -c
+```
+
+A diff can be sent with `--label key=value` (repeatable), and the pairs ride
+along into the record of the review. sa stores them and reads nothing into
+them — they are whatever you will want to join on later, a revision, a
+branch, a ticket:
+
+```console
+$ git diff | sa --label rev=$(git rev-parse --short HEAD)
+$ sa reviews --format jsonl | jq -r '"\(.labels.rev // "-")\t\(.comments | length)"'
+```
+
+The log itself is one JSON object per line at
+`$XDG_STATE_HOME/sa/reviews.jsonl` (`--history-file` or `$SA_HISTORY` to keep
+it elsewhere, `off` to keep none), so `jq` works on it directly and nothing
+about it is sa-shaped. `sa reviews --file` reads any such file, `-` reads
+stdin, which is how logs combine:
 
 ```console
 $ jq -r '.comments[].path' ~/.local/state/sa/reviews.jsonl | sort | uniq -c | sort -rn
-$ jq 'select(.group == "api") | .comments[].body' ~/.local/state/sa/reviews.jsonl
+$ cat mine.jsonl theirs.jsonl | sa reviews --file - --stats
 ```
 
-It stays on the machine that recorded it. Delete the file to forget the lot.
+Keep the log outside the working tree (the default is outside): a log inside
+the tree is appended to on every submit and would dirty the very diff it is
+a log of. It stays on the machine that recorded it. Delete the file to
+forget the lot.
 
 ## Exporting a review
 

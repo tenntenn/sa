@@ -49,6 +49,7 @@ var (
 	onReviewCommand string
 	onReviewURL     string
 	historyPath     string
+	labelFlags      []string
 )
 
 var rootCmd = &cobra.Command{
@@ -114,11 +115,10 @@ Looking back:
   $ sa reviews --since 7d          # what was reviewed this week
   $ sa reviews --stats             # which files draw comments, and how many
 
-  The log is a file you choose. Keep it out of the way, or put it in the
-  project and commit it - it holds no absolute path and nothing about the
-  machine, and a line per review is what makes both work.
+  The log is a file, one JSON object per line, kept outside any working
+  tree - a log inside the tree would dirty the very diff it is a log of.
+  Reading someone else's is just reading a file:
 
-  $ export SA_HISTORY=.sa/reviews.jsonl
   $ sa reviews --file other.jsonl
   $ cat */reviews.jsonl | sa reviews --file - --stats
 
@@ -156,6 +156,8 @@ func init() {
 	f.IntVarP(&port, "port", "p", DefaultPort, "Server port")
 	f.StringVarP(&bind, "bind", "b", "localhost", "Bind address")
 	f.StringVar(&title, "title", "", "Title of the diff (defaults to a generated name)")
+	f.StringArrayVar(&labelFlags, "label", nil,
+		"key=value kept with the diff, repeatable; sa stores it and reads nothing into it")
 	f.BoolVar(&openBrowser, "open", false, "Always open the browser")
 	f.BoolVar(&noOpen, "no-open", false, "Never open the browser")
 	rootCmd.MarkFlagsMutuallyExclusive("open", "no-open")
@@ -210,6 +212,11 @@ func run(cmd *cobra.Command, _ []string) error {
 		return runClear(ctx, group)
 	}
 
+	labels, err := parseLabels(labelFlags)
+	if err != nil {
+		return err
+	}
+
 	content, err := readStdin()
 	if err != nil {
 		return err
@@ -231,6 +238,7 @@ func run(cmd *cobra.Command, _ []string) error {
 			Title:   title,
 			BaseDir: workingDir(),
 			Content: content,
+			Labels:  labels,
 		})
 		if err != nil {
 			return err
@@ -396,6 +404,24 @@ func readStdin() (string, error) {
 		return "", errors.New("the diff on stdin is too large (max 32MB)")
 	}
 	return string(data), nil
+}
+
+// parseLabels reads repeated key=value flags. The values are whatever the
+// sender wanted to remember - a revision, a branch, a ticket - and sa keeps
+// them without reading anything into them.
+func parseLabels(flags []string) (map[string]string, error) {
+	if len(flags) == 0 {
+		return nil, nil
+	}
+	labels := make(map[string]string, len(flags))
+	for _, flag := range flags {
+		key, value, ok := strings.Cut(flag, "=")
+		if !ok || key == "" {
+			return nil, fmt.Errorf("--label wants key=value, got %q", flag)
+		}
+		labels[key] = value
+	}
+	return labels, nil
 }
 
 func workingDir() string {

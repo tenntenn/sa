@@ -100,6 +100,34 @@ func TestAppendAndLoad(t *testing.T) {
 	}
 }
 
+func TestCommentsFlattensReviews(t *testing.T) {
+	records := []history.Record{
+		history.FromGroup(group("api", "",
+			&model.Comment{Path: "a.go", StartLine: 1, Body: "first"},
+			&model.Comment{Path: "b.md", Author: "claude", StartLine: 2, Body: "second"})),
+		history.FromGroup(group("web", "")),
+	}
+	records[0].Labels = map[string]string{"branch": "main"}
+
+	comments := history.Comments(records)
+	if len(comments) != 2 {
+		t.Fatalf("got %d comments, want the review without any to add none", len(comments))
+	}
+	first := comments[0]
+	if first.Group != "api" || first.Path != "a.go" || first.Body != "first" {
+		t.Errorf("first = %+v", first)
+	}
+	if first.ReviewedAt != at(60) || first.Labels["branch"] != "main" {
+		t.Errorf("first should carry its review's time and labels, got %+v", first)
+	}
+	if first.Who() != "reviewer" || comments[1].Who() != "claude" {
+		t.Errorf("authors = %q, %q", first.Who(), comments[1].Who())
+	}
+	if first.Extension() != ".go" || comments[1].Extension() != ".md" {
+		t.Errorf("extensions = %q, %q", first.Extension(), comments[1].Extension())
+	}
+}
+
 func TestSummarize(t *testing.T) {
 	records := []history.Record{
 		history.FromGroup(group("api", "",
