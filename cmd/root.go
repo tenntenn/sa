@@ -180,7 +180,7 @@ func init() {
 	f.BoolVar(&doClear, "clear", false, "Close the review: drop the diffs, comments and hooks of the group")
 	f.BoolVar(&clearAll, "all", false, "With --clear, close every review on the server")
 	f.BoolVar(&jsonOutput, "json", false, "Print structured JSON on stdout")
-	f.StringVar(&moBin, "mo-bin", "mo", "mo executable used for the Markdown preview")
+	f.StringVar(&moBin, "mo-bin", "mo", "mo executable used for mo's Markdown preview")
 	f.IntVar(&moPort, "mo-port", mo.DefaultPort, "Port of the mo server")
 	f.StringVar(&moBind, "mo-bind", mo.DefaultBind, "Bind address of the mo server")
 	f.BoolVar(&allowRemote, "dangerously-allow-remote-access", false,

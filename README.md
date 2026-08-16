@@ -14,8 +14,10 @@ deliberate differences:
   coding agent.
 - **New files are shown unified**, because there is no old side to put next to
   them.
-- **Markdown is previewed by [mo](https://github.com/k1LoW/mo)**, side by side
-  with the diff in a split pane.
+- **Markdown is previewed in a split pane**, side by side with the diff. sa
+  renders it itself, needing nothing installed, and
+  [mo](https://github.com/k1LoW/mo) renders a richer one for those who
+  install it.
 - **One server, growing session.** Like mo, the first invocation starts a
   background server and later ones add their diff to it.
 - **Comments live in the server**, not in the browser, so an agent can read
@@ -27,7 +29,9 @@ deliberate differences:
 $ go install github.com/tenntenn/sa@latest
 ```
 
-The Markdown preview needs the `mo` binary on PATH:
+sa renders the Markdown preview itself, so nothing else is needed.
+[mo](https://github.com/k1LoW/mo) renders a richer preview for those who
+install it — pick it in the preview header once it is on PATH:
 
 ```console
 $ brew install k1LoW/tap/mo
@@ -35,7 +39,7 @@ $ brew install k1LoW/tap/mo
 
 or download it from the [mo releases page](https://github.com/k1LoW/mo/releases).
 `go install` does not work for mo: its published module does not carry the
-embedded frontend. Everything except the Markdown preview works without it.
+embedded frontend.
 
 ## Usage
 
@@ -476,17 +480,22 @@ installing.
 
 ## How the Markdown preview works
 
-sa runs `mo --json <file> --target sa-<group>` and embeds the page mo answers
-with. mo sends `frame-ancestors 'none'` on every response, so a page cannot
-frame it directly; sa therefore publishes mo through a loopback-only reverse
-proxy that rewrites that one directive to allow sa's own origin, and forwards
+By default sa asks itself for the file's Markdown and renders it in the page
+— nothing else runs, and it is the rendering that can follow the diff as you
+scroll.
+
+Picking **mo** in the preview header instead makes sa run
+`mo --json <file> --target sa-<group>` and embed the page mo answers with.
+mo sends `frame-ancestors 'none'` on every response, so a page cannot frame
+it directly; sa therefore publishes mo through a loopback-only reverse proxy
+that rewrites that one directive to allow sa's own origin, and forwards
 everything else — the rest of mo's CSP included — unchanged. "Open in mo"
 always links to mo itself.
 
-Two places render Markdown without mo, because mo cannot be there: an
-exported page (no server behind it) and a phone (no room for mo's own layout
-inside the frame). Both ask sa for the Markdown and render it in the page,
-and both keep a link to mo for the full thing.
+Two places never offer mo, because mo cannot be there: an exported page (no
+server behind it) and a phone (no room for mo's own layout inside the
+frame). Both always render Markdown themselves and keep a link to mo for
+the full thing.
 
 Note that mo cannot be used as a Go library today: everything but its cobra
 entry point lives under `internal/`, and the published module does not build
