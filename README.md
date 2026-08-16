@@ -190,6 +190,30 @@ $ sa comments -t api             # comments of the "api" group
 $ sa comments --clear            # start the next review round
 ```
 
+### Reviewing without a browser
+
+The reviewer does not have to be a person. Comments go in from the command
+line, and `sa submit` is the Submit button — it wakes whoever is waiting,
+starts the hooks, and writes the round into the log:
+
+```console
+$ sa comment internal/server/server.go:166 --author code-review \
+    -m "any site can POST here, and a hook is a shell command sa runs"
+$ sa comment --json --author code-review < findings.json   # many at once
+$ sa submit --note "one thing to fix"
+$ sa submit -q && echo "nothing to address"                # 0 clean, 1 not
+```
+
+Two things make such a review checkable rather than merely confident: each
+comment is anchored to a `path:line` and stored with the code it is about,
+and `--author` keeps it apart from what the human wrote. Which is what makes
+the log worth reading afterwards — you can see whether the machine was
+pointing at the same places the person did:
+
+```console
+$ sa reviews --comments | awk -F'\t' '{print $4}' | sort | uniq -c
+```
+
 ### Putting it in a pipeline
 
 sa reads a diff on stdin and writes text on stdout, so it joins the commands

@@ -101,6 +101,13 @@ Review comments:
 
   $ sa comment main.go:42 -m "Should this be a 404?" --author claude
 
+Reviewing without a browser:
+  A reviewer that is not a person leaves its comments the same way and ends
+  the round itself, which is what the Submit button does.
+
+  $ sa comment main.go:42 -m "..." --author reviewer
+  $ sa submit --note "one thing to fix"
+
 Waiting for the review:
   A review lands when the human is ready, which may be after a meeting or a
   night. sa can wait for it, or start something itself when it arrives.
@@ -181,7 +188,7 @@ func init() {
 	f.StringVar(&historyPath, "history-file", "",
 		`Where submitted reviews are written down ("off" for nowhere, or $SA_HISTORY)`)
 
-	rootCmd.AddCommand(commentCmd, commentsCmd, exportCmd, hookCmd, reviewsCmd, skillCmd, waitCmd)
+	rootCmd.AddCommand(commentCmd, commentsCmd, exportCmd, hookCmd, reviewsCmd, skillCmd, submitCmd, waitCmd)
 }
 
 func addr() string {

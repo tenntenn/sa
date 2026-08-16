@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/tenntenn/sa/internal/history"
 	"github.com/tenntenn/sa/internal/mo"
 	"github.com/tenntenn/sa/internal/model"
 )
@@ -842,5 +843,50 @@ func TestCrossOriginRequestsAreRefused(t *testing.T) {
 				t.Errorf("status = %d, want %d: %s", resp.StatusCode, tc.want, body)
 			}
 		})
+	}
+}
+
+// A review submitted over the API is a review like any other: it wakes what
+// is waiting, and it is written into the log. That is what lets a reviewer
+// who is not a person - `sa submit` - end a round.
+func TestSubmitReviewWithoutABrowser(t *testing.T) {
+	logFile := filepath.Join(t.TempDir(), "reviews.jsonl")
+	ts, _ := newTestServer(t, func(o *Options) { o.HistoryFile = logFile })
+
+	postJSON(t, ts.URL+"/_/api/groups/default/diffs", AddDiffRequest{
+		Content: sampleDiff,
+		Labels:  map[string]string{"rev": "deadbeef"},
+	}, &AddDiffResponse{})
+	postJSON(t, ts.URL+"/_/api/groups/default/comments", AddCommentRequest{
+		Path: "README.md", Side: "new", StartLine: 2, EndLine: 2,
+		Body: "this reads oddly", Author: "code-review",
+	}, &model.Comment{})
+
+	var reviewed model.Group
+	resp := postJSON(t, ts.URL+"/_/api/groups/default/review", SubmitReviewRequest{Note: "one thing"}, &reviewed)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d", resp.StatusCode)
+	}
+	if !reviewed.Reviewed() || reviewed.ReviewNote != "one thing" {
+		t.Errorf("group = %+v, want it marked reviewed", reviewed)
+	}
+	records, err := history.Load(logFile, history.Filter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(records) != 1 {
+		t.Fatalf("got %d record(s) in the log, want the review to have been kept", len(records))
+	}
+	rec := records[0]
+	if rec.Note != "one thing" || rec.Labels["rev"] != "deadbeef" {
+		t.Errorf("record = %+v", rec)
+	}
+	if len(rec.Comments) != 1 || rec.Comments[0].Author != "code-review" {
+		t.Fatalf("comments = %+v, want the reviewer named", rec.Comments)
+	}
+	// Naming the author is what lets a later reading tell the two kinds of
+	// reviewer apart.
+	if got := history.Comments(records); len(got) != 1 || got[0].Who() != "code-review" {
+		t.Errorf("flattened = %+v", got)
 	}
 }

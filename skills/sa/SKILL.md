@@ -1,6 +1,6 @@
 ---
 name: sa
-description: Show a diff to a human for review in the browser with sa, then read their line comments back. Use after producing or being handed changes that a human should look at, when the user asks to review a diff or open a diff/review UI, or when review comments are waiting in sa.
+description: Review a diff with sa - show it to a human in the browser and read their line comments back, or review a change yourself by leaving comments on lines and submitting. Use after producing or being handed changes that someone should look at, when the user asks to review a diff or open a diff/review UI, or when review comments are waiting in sa.
 license: MIT
 ---
 
@@ -190,6 +190,37 @@ browser):
 sa --clear --target <topic>
 ```
 
+### Reviewing instead of being reviewed
+
+The same commands run the other way round, which is how you review a change
+someone hands you. Leave the findings as comments and end the round
+yourself, since there is no browser and no button:
+
+```
+sa comment <path>:<line> -m "<what is wrong and why>" --author <you> --target <topic>
+sa submit --target <topic> --note "<what the review says as a whole>"
+```
+
+`sa submit` is the Submit button: it wakes whoever ran `sa wait`, starts the
+hooks, and writes the round into the log of past reviews. Submit even when
+you found nothing — "nothing to address" is the answer the other side is
+waiting for, and a round that is never submitted is one nobody is told
+about. `--exit-code` reports what you submitted: 1 when something needs
+addressing, 0 when nothing does.
+
+Two things make such a review checkable afterwards, so do both: anchor every
+comment to the exact `path:line` it is about, and always pass `--author` with
+your own name. The line and the stored snippet let a reader see for
+themselves whether the claim holds; the author is what separates your
+findings from the human's when the log is read later.
+
+```
+sa reviews --comments | awk -F'\t' '{print $4}' | sort | uniq -c
+```
+
+Say what you could not check, rather than leaving it out. A review that
+reports only what it verified is worth more than one that sounds complete.
+
 ### Sharing a review without sa
 
 When the human cannot run sa — a review that travels by mail, a page for
@@ -281,6 +312,7 @@ them correct it.
 | `sa --status [--json]` | Show the running server, its groups and comment counts |
 | `sa --clear [-t <name>]` | Close a review: its diffs, comments and hooks |
 | `sa --clear --all` | Close every review on the server |
+| `sa submit [-t <name>] [-m "..."]` | End the round yourself, as the Submit button does |
 | `sa wait [-t <name>]` | Block until the review is submitted, then print it |
 | `sa hook --on-review '<cmd>'` | Have the server run something when the review lands |
 | `sa hook [--clear]` | List or drop those hooks |
