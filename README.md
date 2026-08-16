@@ -52,10 +52,16 @@ browser and returns the shell. Later invocations add to the running server.
 
 ```console
 $ sa --status          # what is being reviewed
-$ sa --clear -t api    # drop the diffs and comments of a group
+$ sa --clear -t api    # close that review: its diffs, comments and hooks
+$ sa --clear --all     # close every review the server holds
 $ sa --restart         # restart, keeping the session
 $ sa --shutdown        # stop the server
 ```
+
+**Close** in the header does the same for the review you are looking at, once
+it has served its purpose. Closing a review is not the same as stopping the
+server: `--shutdown` leaves everything where it is and `--restart` brings it
+back, while closing throws the review away.
 
 ### Groups
 

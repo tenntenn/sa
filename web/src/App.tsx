@@ -56,6 +56,7 @@ export function App() {
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  const [closing, setClosing] = useState(false)
   const [reviewNote, setReviewNote] = useState<string | null>(null)
   const [sidebarWidth, setSidebarWidth] = useState(storedSidebarWidth)
   const bodyRef = useRef<HTMLDivElement>(null)
@@ -167,6 +168,27 @@ export function App() {
     }
   }
 
+  // Closing is the end of a review: the diffs, the comments and the hooks
+  // go, and the page is back to waiting for the next one.
+  const closeReview = async () => {
+    const open = comments.filter((c) => !c.resolved).length
+    const question =
+      open > 0
+        ? `Close this review? ${open} comment(s) are still open and will go with it.`
+        : 'Close this review? Its diffs and comments will go.'
+    if (!window.confirm(question)) return
+    setClosing(true)
+    setError(null)
+    try {
+      await client.closeReview(group)
+      await reload()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setClosing(false)
+    }
+  }
+
   const selectFile = (diffId: string, fileId: string) => {
     setSelected({ diffId, fileId })
     // On a phone the file list covers the screen, so picking a file means
@@ -267,6 +289,16 @@ export function App() {
             }
           >
             {reviewed ? 'Reviewed' : 'Submit review'}
+          </button>
+        )}
+        {!client.isStatic && diffs.length > 0 && (
+          <button
+            className="ghost danger"
+            disabled={closing}
+            onClick={() => void closeReview()}
+            title="Drop this review: its diffs, comments and hooks"
+          >
+            {closing ? 'Closing…' : 'Close'}
           </button>
         )}
         {!narrow && (

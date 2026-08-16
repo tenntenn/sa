@@ -144,6 +144,7 @@ func (s *Server) handler() http.Handler {
 
 	mux.HandleFunc("GET /_/api/status", s.handleStatus)
 	mux.HandleFunc("GET /_/api/groups", s.handleGroups)
+	mux.HandleFunc("DELETE /_/api/groups", s.handleDeleteAllGroups)
 	mux.HandleFunc("GET /_/api/groups/{group}", s.handleGroup)
 	mux.HandleFunc("DELETE /_/api/groups/{group}", s.handleDeleteGroup)
 	mux.HandleFunc("POST /_/api/groups/{group}/diffs", s.handleAddDiff)
@@ -249,6 +250,13 @@ func (s *Server) handleGroup(w http.ResponseWriter, r *http.Request) {
 		g = &model.Group{Name: name, Diffs: []*model.Diff{}, Comments: []*model.Comment{}}
 	}
 	writeJSON(w, http.StatusOK, g)
+}
+
+// handleDeleteAllGroups closes every review at once.
+func (s *Server) handleDeleteAllGroups(w http.ResponseWriter, r *http.Request) {
+	removed := s.store.DeleteAllGroups()
+	s.notify("")
+	writeJSON(w, http.StatusOK, map[string]int{"removed": removed})
 }
 
 func (s *Server) handleDeleteGroup(w http.ResponseWriter, r *http.Request) {

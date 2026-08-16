@@ -162,6 +162,14 @@ sa comments --target <topic> --clear
 git diff | sa --target <topic>
 ```
 
+When the work is done and the review has served its purpose, close it, so the
+next one starts on an empty page (the human can also press Close in the
+browser):
+
+```
+sa --clear --target <topic>
+```
+
 ### Sharing a review without sa
 
 When the human cannot run sa — a review that travels by mail, a page for
@@ -191,7 +199,8 @@ artifact).
 | `sa comments --include-resolved` | Include comments the human resolved |
 | `sa comments --clear` | Remove the comments of the group |
 | `sa --status [--json]` | Show the running server, its groups and comment counts |
-| `sa --clear -t <name>` | Drop the diffs and comments of a group |
+| `sa --clear [-t <name>]` | Close a review: its diffs, comments and hooks |
+| `sa --clear --all` | Close every review on the server |
 | `sa wait [-t <name>]` | Block until the review is submitted, then print it |
 | `sa hook --on-review '<cmd>'` | Have the server run something when the review lands |
 | `sa hook [--clear]` | List or drop those hooks |

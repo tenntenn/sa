@@ -376,6 +376,18 @@ func (s *Store) DeleteHooks(group, id string) int {
 	return removed
 }
 
+// DeleteAllGroups closes every review and returns how many went.
+func (s *Store) DeleteAllGroups() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	n := len(s.groups)
+	s.groups = nil
+	if n > 0 {
+		s.persist()
+	}
+	return n
+}
+
 // FindFileByPath locates a file inside a group by its path. diffID narrows
 // the search to one diff; empty means the newest diff carrying that path,
 // which is the one an agent just sent.

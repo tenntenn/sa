@@ -89,6 +89,11 @@ export async function deleteComment(group: string, id: string): Promise<void> {
   if (!resp.ok) throw new Error((await resp.text()).trim() || resp.statusText)
 }
 
+export async function deleteGroup(group: string): Promise<void> {
+  const resp = await fetch(`/_/api/groups/${encodeURIComponent(group)}`, { method: 'DELETE' })
+  if (!resp.ok) throw new Error((await resp.text()).trim() || resp.statusText)
+}
+
 export async function deleteDiff(group: string, diffId: string): Promise<void> {
   const resp = await fetch(
     `/_/api/groups/${encodeURIComponent(group)}/diffs/${encodeURIComponent(diffId)}`,

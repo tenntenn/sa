@@ -39,6 +39,7 @@ var (
 	doShutdown  bool
 	doRestart   bool
 	doClear     bool
+	clearAll    bool
 	jsonOutput  bool
 	moBin       string
 	moPort      int
@@ -115,7 +116,8 @@ Starting and stopping:
   $ sa --status                   # what is being reviewed
   $ sa --shutdown                 # stop the server
   $ sa --restart                  # restart it, keeping the session
-  $ sa --clear                    # drop the diffs and comments of a group`,
+  $ sa --clear                    # close a review: its diffs, comments, hooks
+  $ sa --clear --all              # close every review on the server`,
 	Args:         cobra.NoArgs,
 	RunE:         run,
 	SilenceUsage: true,
@@ -146,7 +148,8 @@ func init() {
 	f.BoolVar(&doShutdown, "shutdown", false, "Shut the running server down")
 	f.BoolVar(&doRestart, "restart", false, "Restart the running server, keeping the session")
 	rootCmd.MarkFlagsMutuallyExclusive("shutdown", "restart")
-	f.BoolVar(&doClear, "clear", false, "Remove the diffs and comments of the group")
+	f.BoolVar(&doClear, "clear", false, "Close the review: drop the diffs, comments and hooks of the group")
+	f.BoolVar(&clearAll, "all", false, "With --clear, close every review on the server")
 	f.BoolVar(&jsonOutput, "json", false, "Print structured JSON on stdout")
 	f.StringVar(&moBin, "mo-bin", "mo", "mo executable used for the Markdown preview")
 	f.IntVar(&moPort, "mo-port", mo.DefaultPort, "Port of the mo server")
@@ -328,10 +331,18 @@ func runClear(ctx context.Context, group string) error {
 	if _, err := c.Status(ctx); err != nil {
 		return fmt.Errorf("no sa server found on %s", c.Addr)
 	}
+	if clearAll {
+		removed, err := c.DeleteAllGroups(ctx)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(os.Stderr, "sa: closed %d review(s)\n", removed)
+		return nil
+	}
 	if err := c.DeleteGroup(ctx, group); err != nil {
 		return err
 	}
-	fmt.Fprintf(os.Stderr, "sa: group %q cleared\n", group)
+	fmt.Fprintf(os.Stderr, "sa: closed the review of %q\n", group)
 	return nil
 }
 

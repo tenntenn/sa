@@ -44,6 +44,8 @@ export interface SaClient {
   updateComment(group: string, id: string, patch: api.CommentPatch): Promise<void>
   deleteComment(group: string, id: string): Promise<void>
   deleteDiff(group: string, diffId: string): Promise<void>
+  /** closeReview drops the whole review: its diffs, comments and hooks. */
+  closeReview(group: string): Promise<void>
   prompt(group: string): Promise<string>
   /** submitReview tells everyone waiting that the review is done. It only
    * exists where there is a server to tell. */
@@ -96,6 +98,9 @@ function createLiveClient(): SaClient {
     },
     async deleteDiff(group, diffId) {
       await api.deleteDiff(group, diffId)
+    },
+    async closeReview(group) {
+      await api.deleteGroup(group)
     },
     prompt(group) {
       return api.getPrompt(group)
@@ -203,6 +208,9 @@ function createStaticClient(data: StaticPayload): SaClient {
     },
     async deleteDiff() {
       throw new Error('an exported page cannot drop a diff')
+    },
+    async closeReview() {
+      throw new Error('an exported page has no review to close')
     },
     async prompt(group) {
       return buildPrompt(group, data.diffs ?? [], read())

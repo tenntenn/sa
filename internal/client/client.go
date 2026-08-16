@@ -141,6 +141,17 @@ func (c *Client) DeleteGroup(ctx context.Context, group string) error {
 	return c.do(ctx, http.MethodDelete, c.url("/_/api/groups/%s", url.PathEscape(group)), nil, nil)
 }
 
+// DeleteAllGroups closes every review and returns how many went.
+func (c *Client) DeleteAllGroups(ctx context.Context) (int, error) {
+	var res struct {
+		Removed int `json:"removed"`
+	}
+	if err := c.do(ctx, http.MethodDelete, c.url("/_/api/groups"), nil, &res); err != nil {
+		return 0, err
+	}
+	return res.Removed, nil
+}
+
 // Shutdown asks the server to stop.
 func (c *Client) Shutdown(ctx context.Context) error {
 	return c.do(ctx, http.MethodPost, c.url("/_/api/shutdown"), nil, nil)

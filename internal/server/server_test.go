@@ -709,3 +709,69 @@ func TestHookNeedsSomethingToDo(t *testing.T) {
 		t.Fatalf("status = %s, want 400 for an empty hook", resp.Status)
 	}
 }
+
+func TestClosingAReviewTakesEverythingWithIt(t *testing.T) {
+	ts, _ := newTestServer(t)
+	var added AddDiffResponse
+	postJSON(t, ts.URL+"/_/api/groups/default/diffs", AddDiffRequest{Content: sampleDiff}, &added)
+	postJSON(t, ts.URL+"/_/api/groups/default/comments", AddCommentRequest{
+		DiffID: added.Diff.ID, FileID: added.Diff.Files[0].ID, Path: "README.md",
+		Side: "new", StartLine: 2, Body: "hmm",
+	}, nil)
+	postJSON(t, ts.URL+"/_/api/groups/default/hooks", model.Hook{Command: "true"}, nil)
+
+	req, err := http.NewRequest(http.MethodDelete, ts.URL+"/_/api/groups/default", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	if res.StatusCode != http.StatusNoContent {
+		t.Fatalf("status = %s", res.Status)
+	}
+
+	var st Status
+	getJSON(t, ts.URL+"/_/api/status", &st)
+	if len(st.Groups) != 0 {
+		t.Fatalf("groups = %+v, want none left", st.Groups)
+	}
+	// The hooks went with the review: nothing fires for a review nobody has.
+	var hooks []*model.Hook
+	getJSON(t, ts.URL+"/_/api/groups/default/hooks", &hooks)
+	if len(hooks) != 0 {
+		t.Errorf("got %d hooks after closing, want 0", len(hooks))
+	}
+}
+
+func TestClosingEveryReview(t *testing.T) {
+	ts, _ := newTestServer(t)
+	postJSON(t, ts.URL+"/_/api/groups/default/diffs", AddDiffRequest{Content: sampleDiff}, nil)
+	postJSON(t, ts.URL+"/_/api/groups/api/diffs", AddDiffRequest{Content: sampleDiff}, nil)
+
+	req, err := http.NewRequest(http.MethodDelete, ts.URL+"/_/api/groups", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	var removed struct {
+		Removed int `json:"removed"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&removed); err != nil {
+		t.Fatal(err)
+	}
+	if removed.Removed != 2 {
+		t.Errorf("removed = %d, want 2", removed.Removed)
+	}
+	var st Status
+	getJSON(t, ts.URL+"/_/api/status", &st)
+	if len(st.Groups) != 0 {
+		t.Errorf("groups = %+v, want none left", st.Groups)
+	}
+}
