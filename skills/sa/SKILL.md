@@ -248,12 +248,14 @@ sa reviews --comments --since 30d      # one line per comment, to read properly
 ```
 
 For any question `--stats` does not answer, `--comments` emits one record
-per comment — tab-separated text, or flat JSON lines with
-`--format jsonl` — and ordinary tools do the counting:
+per comment and ordinary tools do the counting. Parse the jsonl form — one
+flat JSON object per line, and the only form that carries whole comment
+bodies; the tab-separated text form (date, group, path:lines, author,
+first body line) is for reading and quick pipes:
 
 ```
-sa reviews --comments | cut -f3 | cut -d: -f1 | sort | uniq -c | sort -rn
 sa reviews --comments --format jsonl | jq -r 'select(.suggestions) | .path'
+sa reviews --comments | cut -f3 | cut -d: -f1 | sort | uniq -c | sort -rn
 ```
 
 Worth doing before you hand over a change of the same shape: if the last ten

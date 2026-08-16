@@ -2,7 +2,10 @@ package cmd
 
 import (
 	"fmt"
+	"io"
+	"maps"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -36,16 +39,16 @@ year of reviews can be read as one thing.
   $ sa reviews                     # newest last, one line each
   $ sa reviews --since 7d          # this week
   $ sa reviews -t api --limit 5
-  $ sa reviews --stats             # what they say together
-  $ sa reviews --format json       # every comment, for your own analysis
+  $ sa reviews --stats             # what they say together, and only then
 
 --comments turns the stream around: one record per comment instead of one
-per review, which is the shape counting tools want. The text form is
-tab-separated, the jsonl form is one flat object per line, so the analysis
-itself belongs to whatever you pipe it into:
+per review, which is the shape counting tools want. Parse the jsonl form -
+one flat JSON object per line, fields get added but not renamed. The text
+form is five tab-separated columns (date, group, path:lines, author, first
+line of the body): fine for eyes and quick pipes, lossy by design.
 
-  $ sa reviews --comments | cut -f3 | sort | uniq -c | sort -rn
   $ sa reviews --comments --format jsonl | jq -r 'select(.suggestions).path'
+  $ sa reviews --comments | cut -f3 | sort | uniq -c | sort -rn
 
 The log is a JSON object per line, kept at ` + "`$XDG_STATE_HOME/sa/reviews.jsonl`" + `
 unless --history-file or $SA_HISTORY says otherwise, so jq and friends work
@@ -57,8 +60,10 @@ on it directly and it can be read from anywhere:
 Keep the log outside the working tree (the default is outside): a log inside
 the tree is appended to on every submit and would dirty the very diff it is
 a log of. A record holds no absolute path and nothing about the machine that
-wrote it, so a log reads the same wherever it ends up. Nothing leaves the
-machine on its own.`,
+wrote it, so a log reads the same wherever it ends up. And it is only a
+file: a label you forgot to send can be added afterwards by rewriting it
+with jq, and deleting it forgets the lot. Nothing leaves the machine on its
+own.`,
 	Args:         cobra.NoArgs,
 	RunE:         runReviews,
 	SilenceUsage: true,
@@ -109,7 +114,7 @@ func runReviews(cmd *cobra.Command, _ []string) error {
 		format = "json"
 	}
 	if reviewsComments {
-		return printCommentStream(history.Comments(records), format)
+		return printCommentStream(os.Stdout, history.Comments(records), format)
 	}
 	switch format {
 	case "json":
@@ -165,12 +170,18 @@ func loadReviews(cmd *cobra.Command, filter history.Filter) ([]history.Record, e
 
 // printCommentStream writes one record per comment: flat lines that sort,
 // cut, awk and jq can take from here.
-func printCommentStream(comments []history.CommentRecord, format string) error {
+//
+// The jsonl form is the stable interface: fields may be added to it, the
+// existing ones stay. The text form is five tab-separated columns - date,
+// group, path:lines, author, first line of the body - locked by a test
+// because pipes depend on positions, and lossy by design: the whole body
+// only travels in jsonl.
+func printCommentStream(w io.Writer, comments []history.CommentRecord, format string) error {
 	switch format {
 	case "json":
-		return jsonEncoder(os.Stdout).Encode(comments)
+		return jsonEncoder(w).Encode(comments)
 	case "jsonl":
-		enc := lineEncoder(os.Stdout)
+		enc := lineEncoder(w)
 		for _, c := range comments {
 			if err := enc.Encode(c); err != nil {
 				return err
@@ -179,7 +190,7 @@ func printCommentStream(comments []history.CommentRecord, format string) error {
 		return nil
 	case "text":
 		for _, c := range comments {
-			fmt.Printf("%s\t%s\t%s\t%s\t%s\n",
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n",
 				c.ReviewedAt.Local().Format("2006-01-02"),
 				c.Group,
 				lineRef(c),
@@ -210,23 +221,39 @@ func printReviews(records []history.Record) error {
 		fmt.Println("no review has been submitted yet")
 		return nil
 	}
-	if !reviewsStats {
-		for _, rec := range records {
-			fmt.Printf("%s  %-14s %2d comment(s)%s  %d file(s), +%d -%d%s\n",
-				rec.ReviewedAt.Local().Format("2006-01-02 15:04"),
-				rec.Group,
-				len(rec.Comments),
-				suggestionCount(rec),
-				rec.Files, rec.Additions, rec.Deletions,
-				waited(rec))
-			if note := strings.TrimSpace(rec.Note); note != "" {
-				fmt.Printf("%s\n", indent(note, "      "))
-			}
-		}
-		fmt.Println()
+	if reviewsStats {
+		// The aggregate is printed when asked for and only then; the list
+		// is a list.
+		printStats(history.Summarize(records))
+		return nil
 	}
-	printStats(history.Summarize(records))
+	for _, rec := range records {
+		fmt.Printf("%s  %-14s %2d comment(s)%s  %d file(s), +%d -%d%s%s\n",
+			rec.ReviewedAt.Local().Format("2006-01-02 15:04"),
+			rec.Group,
+			len(rec.Comments),
+			suggestionCount(rec),
+			rec.Files, rec.Additions, rec.Deletions,
+			waited(rec),
+			labelPairs(rec))
+		if note := strings.TrimSpace(rec.Note); note != "" {
+			fmt.Printf("%s\n", indent(note, "      "))
+		}
+	}
 	return nil
+}
+
+// labelPairs puts the labels a review was sent with on its line, sorted so
+// that two runs read the same.
+func labelPairs(rec history.Record) string {
+	if len(rec.Labels) == 0 {
+		return ""
+	}
+	pairs := make([]string, 0, len(rec.Labels))
+	for _, k := range slices.Sorted(maps.Keys(rec.Labels)) {
+		pairs = append(pairs, k+"="+rec.Labels[k])
+	}
+	return "  " + strings.Join(pairs, " ")
 }
 
 func suggestionCount(rec history.Record) string {

@@ -219,15 +219,18 @@ groups they belonged to:
 $ sa reviews                     # one line each, newest last
 $ sa reviews --since 7d          # this week
 $ sa reviews -t api --limit 5
-$ sa reviews --stats             # what they say together
-$ sa reviews --comments          # one line per comment, for your own analysis
 ```
 
 ```
 2026-08-16 03:26  default    2 comment(s), 1 suggestion(s)  3 file(s), +11 -1  waited 42m
       だいたいOK
-2026-08-16 11:02  api        1 comment(s)  3 file(s), +11 -1  waited 3h10m
+2026-08-16 11:02  api        1 comment(s)  3 file(s), +11 -1  waited 3h10m  branch=main
+```
 
+`--stats` reads a pile of them together — and prints only when asked:
+
+```console
+$ sa reviews --stats
 2 review(s), 3 comment(s) (1.5 per review), 1 suggestion(s)
 median wait from diff to review: 1h24m
 most commented:
@@ -241,15 +244,17 @@ by author:
   claude                                   8
 ```
 
-The analysis itself is not sa's job. `--stats` answers the everyday
-questions, and for every other one sa hands the data to the tools that
-already answer questions about streams of records: `--comments` turns the
-log into one flat record per comment — tab-separated as text, one JSON
-object per line as jsonl — and what to count is up to the pipe:
+Any other analysis is not sa's job: sa hands the data to the tools that
+already answer questions about streams of records, and what to count is up
+to the pipe. `--comments` turns the log into one record per comment. Parse
+the jsonl form — one flat JSON object per line; fields get added over time
+but not renamed. The text form is five tab-separated columns (date, group,
+`path:lines`, author, first line of the body): fine for eyes and quick
+pipes, lossy by design, because only jsonl carries the whole body.
 
 ```console
-$ sa reviews --comments | cut -f3 | cut -d: -f1 | sort | uniq -c | sort -rn
 $ sa reviews --comments --format jsonl | jq -r 'select(.suggestions) | .path'
+$ sa reviews --comments | cut -f3 | cut -d: -f1 | sort | uniq -c | sort -rn
 $ sa reviews --comments --since 90d | awk -F'\t' '{print $4}' | sort | uniq -c
 ```
 
@@ -262,6 +267,9 @@ branch, a ticket:
 $ git diff | sa --label rev=$(git rev-parse --short HEAD)
 $ sa reviews --format jsonl | jq -r '"\(.labels.rev // "-")\t\(.comments | length)"'
 ```
+
+A label you forgot to send is not lost: the log is only a file, so `jq` can
+rewrite it after the fact.
 
 The log itself is one JSON object per line at
 `$XDG_STATE_HOME/sa/reviews.jsonl` (`--history-file` or `$SA_HISTORY` to keep
