@@ -6,7 +6,7 @@ import { DiffView } from './components/DiffView'
 import { Divider } from './components/Divider'
 import { PreviewPane } from './components/PreviewPane'
 import { Sidebar } from './components/Sidebar'
-import { SplitPane } from './components/SplitPane'
+import { clampRatio, SplitPane, SPLIT_DEFAULT } from './components/SplitPane'
 
 interface Selected {
   diffId: string
@@ -20,6 +20,15 @@ const SIDEBAR_MAX = 720
 const SIDEBAR_SNAP = 48
 const SIDEBAR_STEP = 24
 const SIDEBAR_KEY = 'sa.sidebar.width'
+const SPLIT_KEY = 'sa.split'
+
+function storedSplitRatio(): number {
+  const stored = window.localStorage.getItem(SPLIT_KEY)
+  if (stored === null) return SPLIT_DEFAULT
+  const ratio = Number(stored)
+  if (!Number.isFinite(ratio) || ratio < 0 || ratio > 1) return SPLIT_DEFAULT
+  return ratio === 0 || ratio === 1 ? ratio : clampRatio(ratio)
+}
 
 function storedSidebarWidth(): number {
   // An unset entry reads as null, which Number() would happily turn into a
@@ -39,7 +48,7 @@ export function App() {
   const [comments, setComments] = useState<Comment[]>([])
   const [status, setStatus] = useState<Status | null>(null)
   const [selected, setSelected] = useState<Selected | null>(null)
-  const [showPreview, setShowPreview] = useState(true)
+  const [splitRatio, setSplitRatio] = useState(storedSplitRatio)
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const [sidebarWidth, setSidebarWidth] = useState(storedSidebarWidth)
@@ -57,6 +66,15 @@ export function App() {
   }, [])
 
   const toggleSidebar = () => setSidebarWidth((w) => (w === 0 ? SIDEBAR_DEFAULT : 0))
+
+  useEffect(() => {
+    window.localStorage.setItem(SPLIT_KEY, String(splitRatio))
+  }, [splitRatio])
+
+  // Minimising one pane hands its room to the other; bringing it back splits
+  // the room again rather than restoring a width nobody remembers.
+  const toggleDiff = () => setSplitRatio((r) => (r === 0 ? SPLIT_DEFAULT : 0))
+  const togglePreview = () => setSplitRatio((r) => (r === 1 ? SPLIT_DEFAULT : 1))
 
   const reload = useCallback(async () => {
     try {
@@ -152,8 +170,18 @@ export function App() {
         <label className="switch">
           <input
             type="checkbox"
-            checked={showPreview}
-            onChange={(ev) => setShowPreview(ev.target.checked)}
+            checked={splitRatio > 0}
+            onChange={toggleDiff}
+            disabled={diffs.length === 0}
+          />
+          Diff
+        </label>
+        <label className="switch">
+          <input
+            type="checkbox"
+            checked={splitRatio < 1}
+            onChange={togglePreview}
+            disabled={diffs.length === 0}
           />
           Preview
         </label>
@@ -199,7 +227,8 @@ export function App() {
             </div>
           ) : (
             <SplitPane
-              showRight={showPreview}
+              ratio={splitRatio}
+              onRatioChange={setSplitRatio}
               left={
                 selectedDiff && selectedFile ? (
                   <DiffView

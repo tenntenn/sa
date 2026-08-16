@@ -177,6 +177,12 @@ body {
   flex-direction: column;
 }
 
+/* A minimised pane keeps no scrollbars and no room of its own; the divider
+   next to it is what brings it back. */
+.split-pane.collapsed {
+  overflow: hidden;
+}
+
 .pane-divider {
   flex: none;
   width: 6px;

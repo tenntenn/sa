@@ -66,6 +66,11 @@ $ sa --shutdown        # stop the server
   agent.
 - Split and unified views can be switched per file; new, deleted and binary
   files stay unified.
+- Every pane is resizable and can be minimised away: drag the edge between
+  two panes, double click it to reset (or to put the file list away), or use
+  the **Files**, **Diff** and **Preview** switches in the header. Dragging an
+  edge all the way in minimises that pane, and dragging it back out or double
+  clicking brings it back. The layout is remembered per browser.
 - Markdown files get a preview pane. The preview shows the working tree file
   when it exists; otherwise sa rebuilds the new side from the diff, which is
   complete for new files and partial for modified ones (a unified diff only
