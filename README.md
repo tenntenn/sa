@@ -101,18 +101,60 @@ produces exactly what `sa comments` would.
 
 ## Agent skill
 
-sa ships a vendor neutral agent skill: plain Markdown with YAML front matter
-that explains the review loop in terms of the sa command line, with no
-assumptions about which agent reads it.
+sa ships a vendor neutral agent skill: one Markdown file with YAML front
+matter that describes the review loop — send the diff, hand the URL to the
+human, read the comments back, address them, start the next round — entirely
+in terms of the sa command line. Nothing in it is specific to a vendor, so any
+agent that can read an instruction file can use it.
+
+The source is [`skills/sa/SKILL.md`](skills/sa/SKILL.md) and it is embedded in
+the binary, so the copy you install always matches the sa you are running.
+
+### Installing it
 
 ```console
-$ sa skill                              # print it
-$ sa skill --install .agents/skills     # write .agents/skills/sa/SKILL.md
-$ sa skill --install ~/.claude/skills   # or wherever your agent looks
+$ sa skill                          # print SKILL.md to stdout
+$ sa skill --list                   # list the files the skill consists of
+$ sa skill --install <dir>          # write <dir>/sa/SKILL.md
+$ sa skill --install <dir> --force  # overwrite an older copy
 ```
 
-The source lives in [`skills/sa/SKILL.md`](skills/sa/SKILL.md), and
-[`AGENTS.md`](AGENTS.md) points at it for agents that read that file.
+`--install` writes the skill as a `sa/` directory inside the directory you
+name, and refuses to overwrite an existing file unless `--force` is given, so
+re-running it after upgrading sa is a one-liner:
+
+```console
+$ sa skill --install ~/.claude/skills --force
+```
+
+Where `<dir>` should point depends on the agent. The common ones:
+
+| Agent | Command |
+| --- | --- |
+| Claude Code, this project only | `sa skill --install .claude/skills` |
+| Claude Code, all your projects | `sa skill --install ~/.claude/skills` |
+| Anything that reads `AGENTS.md` (Codex, Jules, …) | `sa skill --install .agents/skills`, then link it (below) |
+| An agent with its own rules directory (Cursor, Cline, …) | install into that directory — check the agent's docs for the path and the file naming it expects |
+| No skill support at all | `sa skill >> AGENTS.md` (or the agent's instruction file) |
+
+For agents that read `AGENTS.md` rather than a skills directory, install the
+file and point at it from `AGENTS.md`:
+
+```markdown
+## Reviewing changes
+
+Before showing a diff to a human, read [.agents/skills/sa/SKILL.md](.agents/skills/sa/SKILL.md).
+```
+
+That is exactly what this repository does — see [`AGENTS.md`](AGENTS.md).
+
+### Checking that it took
+
+Ask the agent to review something and watch what it runs: it should pipe a
+diff into `sa --target <topic>`, give you the URL, wait, and then read your
+comments with `sa comments`. If it does not, most agents need the skill
+directory to be picked up at session start, so start a new session after
+installing.
 
 ## How the Markdown preview works
 

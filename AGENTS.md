@@ -7,6 +7,11 @@ This repository ships an agent skill for sa itself. Read
 it describes the whole loop (send the diff, hand over the URL, read the
 comments back, address them, start the next round).
 
+To use the same skill in another repository, install it there with
+`sa skill --install <dir>` (see the README for the directory each agent reads,
+or link the installed file from that repository's AGENTS.md the way this
+section does).
+
 Short version:
 
 ```console
