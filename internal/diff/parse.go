@@ -1,8 +1,8 @@
-// Package diff parses unified diff text into the sa data model.
+// Package diff parses unified diff text into the sbnn data model.
 //
 // The parser accepts both git style diffs (with "diff --git" headers and
 // extended headers such as "new file mode") and plain diffs produced by
-// "diff -u". sa never runs git itself: everything it knows about a change
+// "diff -u". sbnn never runs git itself: everything it knows about a change
 // comes from the diff text handed to it on stdin.
 package diff
 
@@ -14,7 +14,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/tenntenn/sa/internal/model"
+	"github.com/tenntenn/sbnn/internal/model"
 )
 
 // markdownExts are the extensions previewed with mo.

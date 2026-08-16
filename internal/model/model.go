@@ -1,5 +1,5 @@
-// Package model defines the data structures shared by the sa CLI, the sa
-// server and the sa web UI.
+// Package model defines the data structures shared by the sbnn CLI, the sbnn
+// server and the sbnn web UI.
 package model
 
 import (
@@ -83,7 +83,7 @@ type File struct {
 	// stay where they are.
 	Folded bool `json:"folded,omitempty"`
 	// FoldReason says why, in words the reader can check and disagree
-	// with. sa never folds a file it cannot give a reason for.
+	// with. sbnn never folds a file it cannot give a reason for.
 	FoldReason string `json:"foldReason,omitempty"`
 	// IsMarkdown reports whether the file can be previewed with mo.
 	IsMarkdown bool    `json:"isMarkdown"`
@@ -102,16 +102,16 @@ func (f *File) Path() string {
 // DevNull is the path git uses for a missing side of a diff.
 const DevNull = "/dev/null"
 
-// Diff is one chunk of unified diff text handed to sa through stdin.
+// Diff is one chunk of unified diff text handed to sbnn through stdin.
 type Diff struct {
 	ID    string `json:"id"`
 	Title string `json:"title"`
 	// BaseDir is the directory the diff paths are relative to. It is the
-	// working directory of the sa invocation that sent the diff.
+	// working directory of the sbnn invocation that sent the diff.
 	BaseDir   string    `json:"baseDir"`
 	CreatedAt time.Time `json:"createdAt"`
 	// Labels are whatever the sender wanted to remember about this diff -
-	// a revision, a branch, a ticket, a machine. sa stores them and gives
+	// a revision, a branch, a ticket, a machine. sbnn stores them and gives
 	// them no meaning at all, which is what lets a review be joined to
 	// whatever else you keep, git or not.
 	Labels map[string]string `json:"labels,omitempty"`
@@ -227,7 +227,7 @@ func closesFence(line, fence string) bool {
 }
 
 // WithSuggestion appends a suggestion block to a comment body, which is how
-// a client that only has the replacement text - the sa command line - writes
+// a client that only has the replacement text - the sbnn command line - writes
 // one.
 func WithSuggestion(body, suggestion string) string {
 	suggestion = strings.TrimRight(suggestion, "\n")
@@ -334,7 +334,7 @@ func (v Verdict) String() string {
 	}
 }
 
-// Hook is what sa does when a review is submitted.
+// Hook is what sbnn does when a review is submitted.
 type Hook struct {
 	ID string `json:"id"`
 	// Command is run through the shell, with the prompt on its stdin.

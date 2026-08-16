@@ -1,8 +1,8 @@
 // Package export writes a review as a single self-contained HTML page.
 //
-// The page carries the same UI as the sa server, but with the diff frozen
+// The page carries the same UI as the sbnn server, but with the diff frozen
 // into it: no server, no mo, no network. It is what you hand to someone who
-// should look at a change without running sa, and it is what makes a review
+// should look at a change without running sbnn, and it is what makes a review
 // publishable as an artifact.
 package export
 
@@ -14,8 +14,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tenntenn/sa/internal/model"
-	"github.com/tenntenn/sa/internal/source"
+	"github.com/tenntenn/sbnn/internal/model"
+	"github.com/tenntenn/sbnn/internal/source"
 )
 
 // PayloadVersion is the schema version of the embedded data.
@@ -29,7 +29,7 @@ type Preview struct {
 	Path     string `json:"path,omitempty"`
 }
 
-// Payload is the data the exported page reads out of window.__SA_DATA__.
+// Payload is the data the exported page reads out of window.__SBNN_DATA__.
 type Payload struct {
 	Version     int                `json:"version"`
 	SaVersion   string             `json:"saVersion,omitempty"`
@@ -93,7 +93,7 @@ type Options struct {
 }
 
 // Render writes the page. assets is the built UI (the dist tree embedded in
-// the sa binary).
+// the sbnn binary).
 func Render(payload *Payload, assets fs.FS, opts Options) (string, error) {
 	css, js, err := readAssets(assets)
 	if err != nil {
@@ -105,7 +105,7 @@ func Render(payload *Payload, assets fs.FS, opts Options) (string, error) {
 	}
 	title := opts.Title
 	if title == "" {
-		title = "sa review: " + payload.Group
+		title = "sbnn review: " + payload.Group
 	}
 
 	var b strings.Builder
@@ -121,7 +121,7 @@ func Render(payload *Payload, assets fs.FS, opts Options) (string, error) {
 	}
 
 	b.WriteString("<div id=\"root\"></div>\n")
-	fmt.Fprintf(&b, "<script>window.__SA_DATA__ = %s;</script>\n", escapeJSONForScript(data))
+	fmt.Fprintf(&b, "<script>window.__SBNN_DATA__ = %s;</script>\n", escapeJSONForScript(data))
 	fmt.Fprintf(&b, "<script type=\"module\">\n%s\n</script>\n", js)
 
 	if !opts.Fragment {
@@ -134,7 +134,7 @@ func Render(payload *Payload, assets fs.FS, opts Options) (string, error) {
 func readAssets(assets fs.FS) (css, js string, err error) {
 	entries, err := fs.ReadDir(assets, "assets")
 	if err != nil {
-		return "", "", fmt.Errorf("the sa UI is not built into this binary: %w", err)
+		return "", "", fmt.Errorf("the sbnn UI is not built into this binary: %w", err)
 	}
 	names := make([]string, 0, len(entries))
 	for _, e := range entries {

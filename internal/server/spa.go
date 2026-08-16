@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tenntenn/sa/web"
+	"github.com/tenntenn/sbnn/web"
 )
 
 // spaHandler serves the review UI. Every path that is not an asset renders
@@ -18,8 +18,8 @@ func (s *Server) spaHandler() http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 			w.WriteHeader(http.StatusServiceUnavailable)
-			io.WriteString(w, "the sa web UI is not built into this binary.\n"+
-				"Run `make build` (it runs `pnpm build` in web/) and reinstall sa.\n")
+			io.WriteString(w, "the sbnn web UI is not built into this binary.\n"+
+				"Run `make build` (it runs `pnpm build` in web/) and reinstall sbnn.\n")
 		})
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

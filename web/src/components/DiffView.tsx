@@ -532,7 +532,7 @@ function selectedLines(file: FileDiff, selection: Selection): Line[] {
 }
 
 /** snippetFor collects the reviewed lines so the comment stays readable
- * outside the browser, for instance in `sa comments`. */
+ * outside the browser, for instance in `sbnn comments`. */
 function snippetFor(file: FileDiff, selection: Selection): string {
   return selectedLines(file, selection)
     .map((line) => `${marker(line.kind)}${line.content}`)

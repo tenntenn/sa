@@ -1,14 +1,14 @@
 ---
-name: sa
-description: Review a diff with sa - show it to a human in the browser and read their line comments back, or review a change yourself by leaving comments on lines and submitting. Use after producing or being handed changes that someone should look at, when the user asks to review a diff or open a diff/review UI, or when review comments are waiting in sa.
+name: sbnn
+description: Review a diff with sbnn - show it to a human in the browser and read their line comments back, or review a change yourself by leaving comments on lines and submitting. Use after producing or being handed changes that someone should look at, when the user asks to review a diff or open a diff/review UI, or when review comments are waiting in sbnn.
 license: MIT
 ---
 
-# Reviewing a diff with a human using sa
+# Reviewing a diff with a human using sbnn
 
-`sa` serves a unified diff as a review page in the browser. The human reads
+`sbnn` serves a unified diff as a review page in the browser. The human reads
 the diff, attaches comments to lines, and you read those comments back from
-the command line. sa never runs git itself: it reads the diff from stdin, so
+the command line. sbnn never runs git itself: it reads the diff from stdin, so
 it works with `git diff`, `jj diff`, `diff -u`, a `.patch` file, or a diff
 you produced yourself.
 
@@ -17,7 +17,7 @@ you produced yourself.
 - You changed code and want a human to look at it before continuing.
 - The user asks to "review this diff", "show me the changes", "open the diff
   in a browser".
-- The user says they left comments in sa (or you sent a diff earlier in this
+- The user says they left comments in sbnn (or you sent a diff earlier in this
   session and are picking the work back up).
 
 Do not use it for changes the user asked you to apply without review, and do
@@ -26,14 +26,14 @@ directly.
 
 ## Prerequisites
 
-`sa` must be on PATH. Check with `sa --version`; if it is missing, tell the
+`sbnn` must be on PATH. Check with `sbnn --version`; if it is missing, tell the
 user how to install it instead of guessing at a substitute:
 
 ```
-go install github.com/tenntenn/sa@latest
+go install github.com/tenntenn/sbnn@latest
 ```
 
-sa renders the Markdown preview itself, so nothing else is needed. `mo`
+sbnn renders the Markdown preview itself, so nothing else is needed. `mo`
 renders a richer one for those who install it, and the reader picks which in
 the preview header: `brew install k1LoW/tap/mo` (or a binary from
 https://github.com/k1LoW/mo/releases).
@@ -48,8 +48,8 @@ into today's review costs the human the attention you asked for, so close the
 old review before opening a new one:
 
 ```
-sa --status --json                  # what is the group holding?
-sa --clear --target <topic>         # close it: diffs, comments and hooks
+sbnn --status --json                  # what is the group holding?
+sbnn --clear --target <topic>         # close it: diffs, comments and hooks
 ```
 
 Two exceptions, both of which mean "do not clear":
@@ -61,30 +61,30 @@ Two exceptions, both of which mean "do not clear":
 
 ### 2. Send the diff
 
-Pipe the diff into `sa` and use `--target` to name the review, so several
+Pipe the diff into `sbnn` and use `--target` to name the review, so several
 reviews can be open at once without mixing their comments:
 
 ```
-git diff | sa --target <topic>
+git diff | sbnn --target <topic>
 ```
 
 Pick the name yourself and keep using it for every command of that review.
-sa attaches no meaning to it, so make it stand for whatever separates this
+sbnn attaches no meaning to it, so make it stand for whatever separates this
 review from your others — the task, the branch, the checkout you are working
 in. If everything you do in this session belongs to one review, export
-`SA_TARGET=<topic>` once instead of repeating the flag.
+`SBNN_TARGET=<topic>` once instead of repeating the flag.
 
 Other ways to produce the same diff text:
 
 ```
-git diff HEAD~1 | sa --target <topic>     # a specific range
-git diff --cached | sa --target <topic>   # staged changes
-diff -u old.txt new.txt | sa --target <topic>
-cat change.patch | sa --target <topic>
+git diff HEAD~1 | sbnn --target <topic>     # a specific range
+git diff --cached | sbnn --target <topic>   # staged changes
+diff -u old.txt new.txt | sbnn --target <topic>
+cat change.patch | sbnn --target <topic>
 ```
 
-sa prints the review URL and returns immediately; the server keeps running in
-the background. Running `sa` again adds another diff to the same page rather
+sbnn prints the review URL and returns immediately; the server keeps running in
+the background. Running `sbnn` again adds another diff to the same page rather
 than starting a second server.
 
 **Fold away what nobody reads line by line.** A diff that arrives with a
@@ -93,7 +93,7 @@ before they reach the change you want looked at. You know which files those
 are — you produced the diff — so say so, with `--collapse`:
 
 ```
-git diff | sa --target <topic> --collapse 'go.sum' --collapse 'web/dist/**'
+git diff | sbnn --target <topic> --collapse 'go.sum' --collapse 'web/dist/**'
 ```
 
 Patterns work like .gitignore: a name without a slash matches at any depth,
@@ -102,12 +102,12 @@ comma-separated list. In a git repository the list can come from the
 repository itself, which beats you guessing at it:
 
 ```
-git diff | sa --collapse "$(git ls-files ':(attr:linguist-generated)' | paste -sd,)"
+git diff | sbnn --collapse "$(git ls-files ':(attr:linguist-generated)' | paste -sd,)"
 ```
 
-sa folds one more kind of file on its own: one that declares itself
+sbnn folds one more kind of file on its own: one that declares itself
 generated, in a `DO NOT EDIT` or `@generated` line its generator wrote. That
-is the file speaking, not sa inferring, and the page says which line it
+is the file speaking, not sbnn inferring, and the page says which line it
 found. Nothing is folded on size, path or extension — a file folded for a
 bad reason is a file nobody reads.
 
@@ -119,32 +119,32 @@ not have looked at.
 Use `--json` when you want to parse the result:
 
 ```
-git diff | sa --target <topic> --json
+git diff | sbnn --target <topic> --json
 ```
 
 ### 3. Hand the URL to the human, and decide how you come back
 
-Tell the user the URL sa printed and say what you want reviewed. Then pick
-one of these — never poll `sa comments` in a loop:
+Tell the user the URL sbnn printed and say what you want reviewed. Then pick
+one of these — never poll `sbnn comments` in a loop:
 
-- **They are reviewing now and you can wait**: `sa wait --target <topic>`
+- **They are reviewing now and you can wait**: `sbnn wait --target <topic>`
   blocks until they press Submit review and then prints the comments. Give it
   a `--timeout` you can afford; status 2 means "not reviewed yet".
 - **The review may land later** — they are in a meeting, it is late, your
   session will not live that long: register the follow-up before you go, so
-  the sa server starts it when the review is submitted, and end your turn.
+  the sbnn server starts it when the review is submitted, and end your turn.
 
   ```
-  sa hook --target <topic> --on-review '<command that resumes the work>'
+  sbnn hook --target <topic> --on-review '<command that resumes the work>'
   ```
 
-  The command gets the review prompt on its stdin and `SA_GROUP`, `SA_URL`,
-  `SA_COMMENTS` and `SA_REVIEW_NOTE` in its environment. Ask the user what
+  The command gets the review prompt on its stdin and `SBNN_GROUP`, `SBNN_URL`,
+  `SBNN_COMMENTS` and `SBNN_REVIEW_NOTE` in its environment. Ask the user what
   that command should be for their setup rather than guessing; if they do not
-  want one, tell them to run `sa comments` and paste the result to you when
+  want one, tell them to run `sbnn comments` and paste the result to you when
   they are back.
 - **Neither**: say you will pick the review up next time, and stop. Nothing
-  is lost — the comments stay in the sa server until they are cleared.
+  is lost — the comments stay in the sbnn server until they are cleared.
 
 ### 4. Leave your own comments, if you have any
 
@@ -153,9 +153,9 @@ human reviews them first. Always pass `--author` with your own name so the
 human can tell your notes from theirs:
 
 ```
-sa comment <path>:<line> -m "<question or note>" --author <you> --target <topic>
-sa comment <path>:<line>-<line> -m "..." --suggest "<replacement>" --author <you>
-sa comment <path>:<line> -m "<question>" --question --author <you>
+sbnn comment <path>:<line> -m "<question or note>" --author <you> --target <topic>
+sbnn comment <path>:<line>-<line> -m "..." --suggest "<replacement>" --author <you>
+sbnn comment <path>:<line> -m "<question>" --question --author <you>
 ```
 
 `--question` marks a comment that wants an **answer, not a change**. The two
@@ -175,14 +175,14 @@ change is noise, not a review.
 ### 5. Read the comments
 
 ```
-sa comments --target <topic>
+sbnn comments --target <topic>
 ```
 
 This prints the open comments as Markdown, each with the file, the line
 range, the reviewed code and the comment body. For programmatic handling:
 
 ```
-sa comments --target <topic> --format json
+sbnn comments --target <topic> --format json
 ```
 
 Every JSON entry has `id`, `path`, `author`, `side` (`new` or `old`),
@@ -219,8 +219,8 @@ clean. This is the one case where the diffs stay: the rounds of one review
 belong together.
 
 ```
-sa comments --target <topic> --clear
-git diff | sa --target <topic>
+sbnn comments --target <topic> --clear
+git diff | sbnn --target <topic>
 ```
 
 When the work is done and the review has served its purpose, close it, so the
@@ -228,7 +228,7 @@ next one starts on an empty page (the human can also press Close in the
 browser):
 
 ```
-sa --clear --target <topic>
+sbnn --clear --target <topic>
 ```
 
 ### Reviewing instead of being reviewed
@@ -238,11 +238,11 @@ someone hands you. Leave the findings as comments and end the round
 yourself, since there is no browser and no button:
 
 ```
-sa comment <path>:<line> -m "<what is wrong and why>" --author <you> --target <topic>
-sa submit --target <topic> --approve -m "<what the review says as a whole>"
+sbnn comment <path>:<line> -m "<what is wrong and why>" --author <you> --target <topic>
+sbnn submit --target <topic> --approve -m "<what the review says as a whole>"
 ```
 
-`sa submit` is the Submit button: it wakes whoever ran `sa wait`, starts the
+`sbnn submit` is the Submit button: it wakes whoever ran `sbnn wait`, starts the
 hooks, and writes the round into the log of past reviews. Submit even when
 you found nothing — "nothing to address" is the answer the other side is
 waiting for, and a round that is never submitted is one nobody is told
@@ -253,9 +253,9 @@ pull request does. It is a separate question from what any one comment
 says, and the reader acts on it:
 
 ```
-sa submit --approve                     # it can go ahead
-sa submit                               # commented: said things, did not decide
-sa submit --request-changes -m "..."    # not as it is
+sbnn submit --approve                     # it can go ahead
+sbnn submit                               # commented: said things, did not decide
+sbnn submit --request-changes -m "..."    # not as it is
 ```
 
 Approve when the change is right and your remarks are worth reading rather
@@ -273,19 +273,19 @@ themselves whether the claim holds; the author is what separates your
 findings from the human's when the log is read later.
 
 ```
-sa reviews --comments | awk -F'\t' '{print $4}' | sort | uniq -c
+sbnn reviews --comments | awk -F'\t' '{print $4}' | sort | uniq -c
 ```
 
 Say what you could not check, rather than leaving it out. A review that
 reports only what it verified is worth more than one that sounds complete.
 
-### Sharing a review without sa
+### Sharing a review without sbnn
 
-When the human cannot run sa — a review that travels by mail, a page for
+When the human cannot run sbnn — a review that travels by mail, a page for
 someone else, an artifact — write the review out as a single HTML file:
 
 ```
-git diff | sa export --target <topic> review.html
+git diff | sbnn export --target <topic> review.html
 ```
 
 The page carries the diff and the same UI, needs no server, and the comments
@@ -293,38 +293,38 @@ written on it stay in that browser. Use `--fragment` when the page is
 embedded into something that brings its own `<html>` (for example an
 artifact).
 
-## Fitting sa into what you were already doing
+## Fitting sbnn into what you were already doing
 
-sa is one command among the ones you already run, so let the shell do the
+sbnn is one command among the ones you already run, so let the shell do the
 joining rather than looking for a flag:
 
 ```
-git diff | sa                          # anything that writes a diff feeds it
-sa comments | pbcopy                   # anything that reads text takes it
-sa reviews --format jsonl | jq ...     # a line per review, for whatever asks
+git diff | sbnn                          # anything that writes a diff feeds it
+sbnn comments | pbcopy                   # anything that reads text takes it
+sbnn reviews --format jsonl | jq ...     # a line per review, for whatever asks
 ```
 
-`sa comments` and `sa wait` say what they found in their exit status too — 0
-when there is nothing to address, 1 when there is, and 2 from `sa wait` when
+`sbnn comments` and `sbnn wait` say what they found in their exit status too — 0
+when there is nothing to address, 1 when there is, and 2 from `sbnn wait` when
 the review has not happened yet — so a review can gate what comes next
 without anyone reading the output:
 
 ```
-git diff | sa --target <topic>
-sa wait --target <topic> -q && git commit -m "<message>"
+git diff | sbnn --target <topic>
+sbnn wait --target <topic> -q && git commit -m "<message>"
 ```
 
 That is the recommended way round committing, and it is worth being plain
 with the user about why: send what you are about to commit, wait for the
-review, and commit only once it comes back with nothing to address. sa has
+review, and commit only once it comes back with nothing to address. sbnn has
 no idea what a commit is and stays out of the way of one — it writes nothing
 into the working tree, so `git status` says exactly what it said before you
 started. When a review does have comments, address them and send the next
 round before committing rather than committing over them.
 
-If the change is already committed, review it the same way: `git show | sa`,
-or `git diff <base>..HEAD | sa`. Use `--title` to say which is which, since
-sa only sees the text.
+If the change is already committed, review it the same way: `git show | sbnn`,
+or `git diff <base>..HEAD | sbnn`. Use `--title` to say which is which, since
+sbnn only sees the text.
 
 ## Learning from past reviews
 
@@ -332,8 +332,8 @@ Every submitted review is kept, which makes the reviewer's habits readable
 rather than guessed at:
 
 ```
-sa reviews --stats                     # which files draw comments, how many per review
-sa reviews --comments --since 30d      # one line per comment, to read properly
+sbnn reviews --stats                     # which files draw comments, how many per review
+sbnn reviews --comments --since 30d      # one line per comment, to read properly
 ```
 
 For any question `--stats` does not answer, `--comments` emits one record
@@ -343,8 +343,8 @@ bodies; the tab-separated text form (date, group, path:lines, author,
 first body line) is for reading and quick pipes:
 
 ```
-sa reviews --comments --format jsonl | jq -r 'select(.suggestions) | .path'
-sa reviews --comments | cut -f3 | cut -d: -f1 | sort | uniq -c | sort -rn
+sbnn reviews --comments --format jsonl | jq -r 'select(.suggestions) | .path'
+sbnn reviews --comments | cut -f3 | cut -d: -f1 | sort | uniq -c | sort -rn
 ```
 
 Worth doing before you hand over a change of the same shape: if the last ten
@@ -357,32 +357,32 @@ them correct it.
 
 | Command | What it does |
 | --- | --- |
-| `<diff producer> \| sa` | Add a diff to the default group and print its URL |
-| `... \| sa -t <name>` | Add it to a named group (its own URL and comments) |
-| `... \| sa --title "..."` | Give the diff a title shown in the UI |
-| `... \| sa --collapse '<glob>'` | Fold generated files away, repeatable |
-| `... \| sa --no-open` | Do not open a browser (useful in headless runs) |
-| `sa comment <path>:<line> -m "..."` | Leave a comment of your own (pass `--author`) |
-| `sa comment ... --question` | Mark it as wanting an answer, not a change |
-| `sa comment --json` | Post many comments at once, read from stdin |
-| `sa comments [-t <name>]` | Print open comments as Markdown |
-| `sa comments --format json` | Print comments as JSON |
-| `sa comments --include-resolved` | Include comments the human resolved |
-| `sa comments --clear` | Remove the comments of the group |
-| `sa --status [--json]` | Show the running server, its groups and comment counts |
-| `sa --clear [-t <name>]` | Close a review: its diffs, comments and hooks |
-| `sa --clear --all` | Close every review on the server |
-| `sa submit [-t <name>] [-m "..."]` | End the round yourself, as the Submit button does |
-| `sa wait [-t <name>]` | Block until the review is submitted, then print it |
-| `sa hook --on-review '<cmd>'` | Have the server run something when the review lands |
-| `sa hook [--clear]` | List or drop those hooks |
-| `sa reviews [--stats] [--since 7d]` | The reviews that were submitted, and what they say together |
-| `sa reviews --comments [--format jsonl]` | One record per comment, for sort/uniq/awk/jq |
-| `sa --shutdown` | Stop the server |
-| `... \| sa export <file>` | Write the review as one self-contained HTML page |
-| `... \| sa export --fragment <file>` | The same, body only, for embedding |
+| `<diff producer> \| sbnn` | Add a diff to the default group and print its URL |
+| `... \| sbnn -t <name>` | Add it to a named group (its own URL and comments) |
+| `... \| sbnn --title "..."` | Give the diff a title shown in the UI |
+| `... \| sbnn --collapse '<glob>'` | Fold generated files away, repeatable |
+| `... \| sbnn --no-open` | Do not open a browser (useful in headless runs) |
+| `sbnn comment <path>:<line> -m "..."` | Leave a comment of your own (pass `--author`) |
+| `sbnn comment ... --question` | Mark it as wanting an answer, not a change |
+| `sbnn comment --json` | Post many comments at once, read from stdin |
+| `sbnn comments [-t <name>]` | Print open comments as Markdown |
+| `sbnn comments --format json` | Print comments as JSON |
+| `sbnn comments --include-resolved` | Include comments the human resolved |
+| `sbnn comments --clear` | Remove the comments of the group |
+| `sbnn --status [--json]` | Show the running server, its groups and comment counts |
+| `sbnn --clear [-t <name>]` | Close a review: its diffs, comments and hooks |
+| `sbnn --clear --all` | Close every review on the server |
+| `sbnn submit [-t <name>] [-m "..."]` | End the round yourself, as the Submit button does |
+| `sbnn wait [-t <name>]` | Block until the review is submitted, then print it |
+| `sbnn hook --on-review '<cmd>'` | Have the server run something when the review lands |
+| `sbnn hook [--clear]` | List or drop those hooks |
+| `sbnn reviews [--stats] [--since 7d]` | The reviews that were submitted, and what they say together |
+| `sbnn reviews --comments [--format jsonl]` | One record per comment, for sort/uniq/awk/jq |
+| `sbnn --shutdown` | Stop the server |
+| `... \| sbnn export <file>` | Write the review as one self-contained HTML page |
+| `... \| sbnn export --fragment <file>` | The same, body only, for embedding |
 
-`--port` (default 6280) selects the server; use it only if the user runs sa
+`--port` (default 6280) selects the server; use it only if the user runs sbnn
 on a non-default port.
 
 ## Notes
@@ -390,12 +390,12 @@ on a non-default port.
 - New files are shown as a unified diff, because there is no old side to put
   next to them.
 - Markdown files get a preview pane next to the diff. The preview shows the
-  working tree file when it exists; otherwise sa rebuilds what it can from
+  working tree file when it exists; otherwise sbnn rebuilds what it can from
   the diff, and unified diffs only carry the changed hunks, so such a preview
   is partial by nature.
-- Comments are stored by the sa server, not in the browser, which is why they
+- Comments are stored by the sbnn server, not in the browser, which is why they
   survive a reload and why you can read them from the command line.
-- `sa --status --json` is the reliable way to check whether comments are
+- `sbnn --status --json` is the reliable way to check whether comments are
   waiting: it reports `comments`, `unresolved` and `reviewed` per group.
   `reviewed` is true once the human has submitted, and false again as soon as
   a newer diff arrives.

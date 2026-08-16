@@ -1,4 +1,4 @@
-// Package paths resolves the directories sa keeps its state and its
+// Package paths resolves the directories sbnn keeps its state and its
 // generated preview files in.
 package paths
 
@@ -9,7 +9,7 @@ import (
 	"runtime"
 )
 
-const appName = "sa"
+const appName = "sbnn"
 
 // StateDir returns the directory holding the session state, creating it if
 // needed. It follows the XDG base directory specification on Unix.
@@ -59,7 +59,7 @@ func HistoryFile() (string, error) {
 	return filepath.Join(dir, "reviews.jsonl"), nil
 }
 
-// CacheDir returns the directory for files sa generates, such as the
+// CacheDir returns the directory for files sbnn generates, such as the
 // Markdown reconstructed from a diff and handed to mo.
 func CacheDir() (string, error) {
 	base, err := os.UserCacheDir()

@@ -8,9 +8,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/tenntenn/sa/internal/mo"
-	"github.com/tenntenn/sa/internal/model"
-	"github.com/tenntenn/sa/internal/source"
+	"github.com/tenntenn/sbnn/internal/mo"
+	"github.com/tenntenn/sbnn/internal/model"
+	"github.com/tenntenn/sbnn/internal/source"
 )
 
 // errNotPreviewable is returned for files mo cannot show.
@@ -30,7 +30,7 @@ const (
 
 // PreviewResponse is the payload of the preview endpoint.
 type PreviewResponse struct {
-	// URL is the frameable URL of the mo page, served through sa's preview
+	// URL is the frameable URL of the mo page, served through sbnn's preview
 	// proxy. It is empty when the proxy could not be started.
 	URL string `json:"url"`
 	// MoURL is the URL of the same page on the mo server itself, for
@@ -125,10 +125,10 @@ func (p *previewer) preview(ctx context.Context, group string, d *model.Diff, f 
 	return out, nil
 }
 
-// moGroupName keeps sa's previews in their own mo group so that they never
+// moGroupName keeps sbnn's previews in their own mo group so that they never
 // mix with the files the user opened in mo directly.
 func moGroupName(group string) string {
-	return "sa-" + group
+	return "sbnn-" + group
 }
 
 // resolve returns the path of the Markdown handed to mo. The working tree

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/tenntenn/sa/internal/model"
+	"github.com/tenntenn/sbnn/internal/model"
 )
 
 // PromptOptions tunes the prompt rendered from review comments.
@@ -28,7 +28,7 @@ func Prompt(g *model.Group, opts PromptOptions) string {
 		comments = append(comments, c)
 	}
 
-	fmt.Fprintf(&b, "# Review comments (sa group %q)\n\n", g.Name)
+	fmt.Fprintf(&b, "# Review comments (sbnn group %q)\n\n", g.Name)
 	if g.ReviewedAt.IsZero() {
 		// Nothing was submitted; these are comments in progress.
 	} else {

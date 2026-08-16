@@ -70,7 +70,7 @@ func TestMoProxyServesFramablePages(t *testing.T) {
 	go proxy.serve()
 	defer proxy.close()
 
-	resp, err := http.Get(proxy.baseURL + "/sa-default?file=abc")
+	resp, err := http.Get(proxy.baseURL + "/sbnn-default?file=abc")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,7 +79,7 @@ func TestMoProxyServesFramablePages(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(body), "mo page for /sa-default?file=abc") {
+	if !strings.Contains(string(body), "mo page for /sbnn-default?file=abc") {
 		t.Errorf("body = %q", body)
 	}
 	if !strings.Contains(resp.Header.Get("Content-Security-Policy"), "frame-ancestors 'self' http://localhost:6280") {
@@ -96,11 +96,11 @@ func TestMoProxyRewritesURLs(t *testing.T) {
 
 	// mo may answer with either spelling of the loopback host.
 	for _, in := range []string{
-		"http://localhost:6275/sa-default?file=abc",
-		"http://127.0.0.1:6275/sa-default?file=abc",
+		"http://localhost:6275/sbnn-default?file=abc",
+		"http://127.0.0.1:6275/sbnn-default?file=abc",
 	} {
 		got := proxy.rewrite(in)
-		if !strings.HasPrefix(got, proxy.baseURL) || !strings.HasSuffix(got, "/sa-default?file=abc") {
+		if !strings.HasPrefix(got, proxy.baseURL) || !strings.HasSuffix(got, "/sbnn-default?file=abc") {
 			t.Errorf("rewrite(%q) = %q", in, got)
 		}
 	}

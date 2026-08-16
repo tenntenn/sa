@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tenntenn/sa/internal/history"
-	"github.com/tenntenn/sa/internal/model"
+	"github.com/tenntenn/sbnn/internal/history"
+	"github.com/tenntenn/sbnn/internal/model"
 )
 
 func at(minutes int) time.Time {

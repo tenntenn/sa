@@ -1,4 +1,4 @@
-// Package cmd implements the sa command line interface.
+// Package cmd implements the sbnn command line interface.
 package cmd
 
 import (
@@ -14,17 +14,17 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/tenntenn/sa/internal/client"
-	"github.com/tenntenn/sa/internal/mo"
-	"github.com/tenntenn/sa/internal/server"
-	"github.com/tenntenn/sa/version"
+	"github.com/tenntenn/sbnn/internal/client"
+	"github.com/tenntenn/sbnn/internal/mo"
+	"github.com/tenntenn/sbnn/internal/server"
+	"github.com/tenntenn/sbnn/version"
 )
 
-// DefaultPort is the port the sa server listens on. mo uses 6275, sa sits
+// DefaultPort is the port the sbnn server listens on. mo uses 6275, sbnn sits
 // next to it.
 const DefaultPort = 6280
 
-// maxDiffSize bounds what sa reads from stdin.
+// maxDiffSize bounds what sbnn reads from stdin.
 const maxDiffSize = 32 << 20
 
 var (
@@ -54,95 +54,95 @@ var (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "sa",
-	Short: "sa reviews a unified diff in your browser",
-	Long: `sa serves a unified diff read from stdin as a review page in your browser.
+	Use:   "sbnn",
+	Short: "sbnn reviews a unified diff in your browser",
+	Long: `sbnn serves a unified diff read from stdin as a review page in your browser.
 
-sa never runs git. Whatever produces a diff - git, jj, diff -u, a patch file,
+sbnn never runs git. Whatever produces a diff - git, jj, diff -u, a patch file,
 a coding agent - can pipe it in:
 
-  git diff | sa
-  git diff HEAD~3 | sa --target refactor
-  diff -u old.md new.md | sa
-  cat change.patch | sa
+  git diff | sbnn
+  git diff HEAD~3 | sbnn --target refactor
+  diff -u old.md new.md | sbnn
+  cat change.patch | sbnn
 
 Single server, growing session:
-  sa runs in the background on port 6280. The first invocation starts it and
+  sbnn runs in the background on port 6280. The first invocation starts it and
   returns the shell right away; later invocations add their diff to the
   running server instead of starting a new one, the same way mo does.
 
-  $ git diff | sa                 # starts the server, shows the diff
-  $ git diff --cached | sa        # adds another diff to the same page
+  $ git diff | sbnn                 # starts the server, shows the diff
+  $ git diff --cached | sbnn        # adds another diff to the same page
 
 Groups:
   --target (-t) puts diffs into a named group with its own URL and its own
   review comments.
 
-  $ git diff | sa --target api    # http://localhost:6280/api
+  $ git diff | sbnn --target api    # http://localhost:6280/api
 
 New files:
   A new file has no left hand side, so it is always shown as a unified diff.
 
 Markdown preview:
-  Markdown files are previewed in a split pane next to the diff. sa renders
+  Markdown files are previewed in a split pane next to the diff. sbnn renders
   the preview itself, and mo (https://github.com/k1LoW/mo) renders a richer
   one for those who install it - the page has a switch for the two. The
-  working tree file is previewed when it exists; otherwise sa reconstructs
+  working tree file is previewed when it exists; otherwise sbnn reconstructs
   the new side from the diff itself. For mo: ` + mo.InstallHint + `.
 
 Review comments:
   Comments can be attached to lines in the browser. They are stored by the
-  sa server, not in the browser, so an agent can read them back:
+  sbnn server, not in the browser, so an agent can read them back:
 
-  $ sa comments                   # comments as a prompt for an agent
-  $ sa comments --format json     # comments as JSON
-  $ sa comments --clear           # start the next review round
+  $ sbnn comments                   # comments as a prompt for an agent
+  $ sbnn comments --format json     # comments as JSON
+  $ sbnn comments --clear           # start the next review round
 
   They go the other way too: an agent can point at the lines it is unsure
   about, and the human sees it next to the diff.
 
-  $ sa comment main.go:42 -m "Should this be a 404?" --author claude
+  $ sbnn comment main.go:42 -m "Should this be a 404?" --author claude
 
 Reviewing without a browser:
   A reviewer that is not a person leaves its comments the same way and ends
   the round itself, which is what the Submit button does.
 
-  $ sa comment main.go:42 -m "..." --author reviewer
-  $ sa submit --note "one thing to fix"
+  $ sbnn comment main.go:42 -m "..." --author reviewer
+  $ sbnn submit --note "one thing to fix"
 
 Waiting for the review:
   A review lands when the human is ready, which may be after a meeting or a
-  night. sa can wait for it, or start something itself when it arrives.
+  night. sbnn can wait for it, or start something itself when it arrives.
 
-  $ sa wait                       # blocks until "Submit review" is pressed
-  $ git diff | sa --on-review 'claude -p "$(sa comments)"'
+  $ sbnn wait                       # blocks until "Submit review" is pressed
+  $ git diff | sbnn --on-review 'claude -p "$(sbnn comments)"'
 
 Looking back:
   Every submitted review is written down, one JSON object per line, so a year
   of them can be read as one thing rather than thrown away a round at a time.
 
-  $ sa reviews --since 7d          # what was reviewed this week
-  $ sa reviews --stats             # which files draw comments, and how many
+  $ sbnn reviews --since 7d          # what was reviewed this week
+  $ sbnn reviews --stats             # which files draw comments, and how many
 
   The log is a file, one JSON object per line, kept outside any working
   tree - a log inside the tree would dirty the very diff it is a log of.
   Reading someone else's is just reading a file:
 
-  $ sa reviews --file other.jsonl
-  $ cat */reviews.jsonl | sa reviews --file - --stats
+  $ sbnn reviews --file other.jsonl
+  $ cat */reviews.jsonl | sbnn reviews --file - --stats
 
 Exporting:
-  sa export writes the review as one self-contained HTML page that needs no
-  server, which is how a review travels to someone who does not run sa.
+  sbnn export writes the review as one self-contained HTML page that needs no
+  server, which is how a review travels to someone who does not run sbnn.
 
-  $ git diff | sa export review.html
+  $ git diff | sbnn export review.html
 
 Starting and stopping:
-  $ sa --status                   # what is being reviewed
-  $ sa --shutdown                 # stop the server
-  $ sa --restart                  # restart it, keeping the session
-  $ sa --clear                    # close a review: its diffs, comments, hooks
-  $ sa --clear --all              # close every review on the server`,
+  $ sbnn --status                   # what is being reviewed
+  $ sbnn --shutdown                 # stop the server
+  $ sbnn --restart                  # restart it, keeping the session
+  $ sbnn --clear                    # close a review: its diffs, comments, hooks
+  $ sbnn --clear --all              # close every review on the server`,
 	Args:         cobra.NoArgs,
 	RunE:         run,
 	SilenceUsage: true,
@@ -151,22 +151,22 @@ Starting and stopping:
 	Version:       version.Version,
 }
 
-// Execute runs the sa command.
+// Execute runs the sbnn command.
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, "sa:", err)
+		fmt.Fprintln(os.Stderr, "sbnn:", err)
 		os.Exit(1)
 	}
 }
 
 func init() {
 	f := rootCmd.Flags()
-	f.StringVarP(&target, "target", "t", "", "Group name the diff is added to (default \"default\", or $SA_TARGET)")
+	f.StringVarP(&target, "target", "t", "", "Group name the diff is added to (default \"default\", or $SBNN_TARGET)")
 	f.IntVarP(&port, "port", "p", DefaultPort, "Server port")
 	f.StringVarP(&bind, "bind", "b", "localhost", "Bind address")
 	f.StringVar(&title, "title", "", "Title of the diff (defaults to a generated name)")
 	f.StringArrayVar(&labelFlags, "label", nil,
-		"key=value kept with the diff, repeatable; sa stores it and reads nothing into it")
+		"key=value kept with the diff, repeatable; sbnn stores it and reads nothing into it")
 	f.StringArrayVar(&collapseFlags, "collapse", nil,
 		"Fold files matching this pattern, repeatable (gitignore-style: go.sum, web/dist/**)")
 	f.BoolVar(&openBrowser, "open", false, "Always open the browser")
@@ -190,7 +190,7 @@ func init() {
 	f.StringVar(&onReviewURL, "on-review-url", "",
 		"URL the server POSTs to when the review of this group is submitted")
 	f.StringVar(&historyPath, "history-file", "",
-		`Where submitted reviews are written down ("off" for nowhere, or $SA_HISTORY)`)
+		`Where submitted reviews are written down ("off" for nowhere, or $SBNN_HISTORY)`)
 
 	rootCmd.AddCommand(commentCmd, commentsCmd, exportCmd, hookCmd, reviewsCmd, skillCmd, submitCmd, waitCmd)
 }
@@ -259,7 +259,7 @@ func run(cmd *cobra.Command, _ []string) error {
 		out.Diff = summarize(res)
 	}
 	// mo used to be what previewed Markdown, and its absence was worth a
-	// warning. sa renders the preview itself now, so nothing is missing:
+	// warning. sbnn renders the preview itself now, so nothing is missing:
 	// whoever wants mo's richer one is told how to get it in the page,
 	// where they ask for it.
 
@@ -270,7 +270,7 @@ func run(cmd *cobra.Command, _ []string) error {
 	return nil
 }
 
-// shouldOpen decides whether to open the browser: like mo, sa opens it when
+// shouldOpen decides whether to open the browser: like mo, sbnn opens it when
 // it just started the server, and otherwise only on request. In a pipeline
 // or a job there is nobody to open it for, so it stays shut unless asked.
 func shouldOpen(started bool) bool {
@@ -317,7 +317,7 @@ func runStatus(ctx context.Context) error {
 	if jsonOutput {
 		return writeJSON(st)
 	}
-	fmt.Printf("%s  running (pid %d, sa %s)\n", st.URL, st.PID, st.Version)
+	fmt.Printf("%s  running (pid %d, sbnn %s)\n", st.URL, st.PID, st.Version)
 	if st.MoAvailable {
 		fmt.Printf("  mo preview: %s\n", st.MoURL)
 	} else {
@@ -333,7 +333,7 @@ func runStatus(ctx context.Context) error {
 func runShutdown(ctx context.Context) error {
 	c := client.New(addr(), 2*time.Second)
 	if _, err := c.Status(ctx); err != nil {
-		return fmt.Errorf("no sa server found on %s", c.Addr)
+		return fmt.Errorf("no sbnn server found on %s", c.Addr)
 	}
 	if err := c.Shutdown(ctx); err != nil {
 		return err
@@ -341,7 +341,7 @@ func runShutdown(ctx context.Context) error {
 	if err := waitForDown(ctx, c, 5*time.Second); err != nil {
 		return err
 	}
-	fmt.Fprintf(os.Stderr, "sa: server on %s stopped\n", c.Addr)
+	fmt.Fprintf(os.Stderr, "sbnn: server on %s stopped\n", c.Addr)
 	return nil
 }
 
@@ -371,20 +371,20 @@ func runRestart(ctx context.Context) error {
 func runClear(ctx context.Context, group string) error {
 	c := client.New(addr(), 2*time.Second)
 	if _, err := c.Status(ctx); err != nil {
-		return fmt.Errorf("no sa server found on %s", c.Addr)
+		return fmt.Errorf("no sbnn server found on %s", c.Addr)
 	}
 	if clearAll {
 		removed, err := c.DeleteAllGroups(ctx)
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(os.Stderr, "sa: closed %d review(s)\n", removed)
+		fmt.Fprintf(os.Stderr, "sbnn: closed %d review(s)\n", removed)
 		return nil
 	}
 	if err := c.DeleteGroup(ctx, group); err != nil {
 		return err
 	}
-	fmt.Fprintf(os.Stderr, "sa: closed the review of %q\n", group)
+	fmt.Fprintf(os.Stderr, "sbnn: closed the review of %q\n", group)
 	return nil
 }
 
@@ -399,7 +399,7 @@ func waitForDown(ctx context.Context, c *client.Client, timeout time.Duration) e
 	return fmt.Errorf("server on %s did not stop", c.Addr)
 }
 
-// readStdin reads the diff piped into sa. A terminal on stdin means the user
+// readStdin reads the diff piped into sbnn. A terminal on stdin means the user
 // only wants to open or manage the server, so it reads nothing.
 func readStdin() (string, error) {
 	fi, err := os.Stdin.Stat()
@@ -420,7 +420,7 @@ func readStdin() (string, error) {
 }
 
 // parseLabels reads repeated key=value flags. The values are whatever the
-// sender wanted to remember - a revision, a branch, a ticket - and sa keeps
+// sender wanted to remember - a revision, a branch, a ticket - and sbnn keeps
 // them without reading anything into them.
 func parseLabels(flags []string) (map[string]string, error) {
 	if len(flags) == 0 {
@@ -518,6 +518,6 @@ func openURL(u string) {
 		return
 	}
 	if err := browserOpen(u); err != nil {
-		fmt.Fprintf(os.Stderr, "sa: cannot open a browser (%v); open %s yourself\n", err, u)
+		fmt.Fprintf(os.Stderr, "sbnn: cannot open a browser (%v); open %s yourself\n", err, u)
 	}
 }

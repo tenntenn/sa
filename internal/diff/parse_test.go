@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tenntenn/sa/internal/diff"
-	"github.com/tenntenn/sa/internal/model"
+	"github.com/tenntenn/sbnn/internal/diff"
+	"github.com/tenntenn/sbnn/internal/model"
 )
 
 func TestParseGitDiff(t *testing.T) {
@@ -285,7 +285,7 @@ func TestReconstructPartial(t *testing.T) {
 	if complete {
 		t.Error("complete = true, want false for a partial hunk")
 	}
-	if !strings.Contains(got, "sa: 9 line(s) not included") {
+	if !strings.Contains(got, "sbnn: 9 line(s) not included") {
 		t.Errorf("missing gap marker: %q", got)
 	}
 	if !strings.Contains(got, "new") || strings.Contains(got, "old") {

@@ -1,4 +1,4 @@
-// Package server implements the resident sa server: it holds the diffs sent
+// Package server implements the resident sbnn server: it holds the diffs sent
 // from stdin, serves the review UI, and keeps the review comments.
 package server
 
@@ -19,10 +19,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/tenntenn/sa/internal/diff"
-	"github.com/tenntenn/sa/internal/history"
-	"github.com/tenntenn/sa/internal/mo"
-	"github.com/tenntenn/sa/internal/model"
+	"github.com/tenntenn/sbnn/internal/diff"
+	"github.com/tenntenn/sbnn/internal/history"
+	"github.com/tenntenn/sbnn/internal/mo"
+	"github.com/tenntenn/sbnn/internal/model"
 )
 
 // maxDiffSize bounds a single diff sent to the server.
@@ -30,7 +30,7 @@ const maxDiffSize = 32 << 20 // 32MB
 
 // Options configures a Server.
 type Options struct {
-	// Bind and Port are the address the sa server listens on.
+	// Bind and Port are the address the sbnn server listens on.
 	Bind string
 	Port int
 	// SessionFile is where the session is persisted. Empty disables it.
@@ -48,7 +48,7 @@ type Options struct {
 	AllowRemote bool
 }
 
-// Server is the resident sa server.
+// Server is the resident sbnn server.
 type Server struct {
 	opts   Options
 	store  *Store
@@ -69,7 +69,7 @@ func New(opts Options) (*Server, error) {
 		opts.Mo = mo.New("", 0, "")
 	}
 	if !opts.AllowRemote && !isLoopback(opts.Bind) {
-		return nil, fmt.Errorf("refusing to bind to %s: sa serves local diffs and comments without authentication "+
+		return nil, fmt.Errorf("refusing to bind to %s: sbnn serves local diffs and comments without authentication "+
 			"(pass --dangerously-allow-remote-access if you really mean it)", opts.Bind)
 	}
 	s := &Server{
@@ -175,7 +175,7 @@ func (s *Server) handler() http.Handler {
 	return s.withSecurityHeaders(mux)
 }
 
-// withSecurityHeaders sets a CSP for sa's own pages. The preview iframe is
+// withSecurityHeaders sets a CSP for sbnn's own pages. The preview iframe is
 // the one cross origin the page is allowed to load.
 func (s *Server) withSecurityHeaders(next http.Handler) http.Handler {
 	frameSrc := "'none'"
@@ -199,11 +199,11 @@ func (s *Server) withSecurityHeaders(next http.Handler) http.Handler {
 		w.Header().Set("Content-Security-Policy", csp)
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		if reason, ok := s.crossOrigin(r); ok {
-			// A page on some other site asked sa to change something. It
+			// A page on some other site asked sbnn to change something. It
 			// is not the person sitting here, whatever it says.
 			slog.Warn("refused a cross-origin request", "reason", reason,
 				"method", r.Method, "path", r.URL.Path)
-			http.Error(w, "sa only takes changes from its own page or from the command line",
+			http.Error(w, "sbnn only takes changes from its own page or from the command line",
 				http.StatusForbidden)
 			return
 		}
@@ -212,11 +212,11 @@ func (s *Server) withSecurityHeaders(next http.Handler) http.Handler {
 }
 
 // crossOrigin reports whether a state-changing request came from somewhere
-// other than sa's own page, and why.
+// other than sbnn's own page, and why.
 //
-// sa listens on loopback with no authentication, which any website the user
+// sbnn listens on loopback with no authentication, which any website the user
 // visits can reach: a POST from a page on evil.example would otherwise
-// register a hook, and a hook is a shell command sa runs. Browsers name
+// register a hook, and a hook is a shell command sbnn runs. Browsers name
 // their sender - Origin, and Sec-Fetch-Site on top of it - and the command
 // line sends neither, which is the whole distinction.
 func (s *Server) crossOrigin(r *http.Request) (string, bool) {
@@ -227,7 +227,7 @@ func (s *Server) crossOrigin(r *http.Request) (string, bool) {
 		return "", false
 	}
 	// Sec-Fetch-Site is sent by every current browser and by nothing else.
-	// "none" is the address bar, "same-origin" is sa's own page.
+	// "none" is the address bar, "same-origin" is sbnn's own page.
 	switch site := r.Header.Get("Sec-Fetch-Site"); site {
 	case "", "none", "same-origin":
 	default:
@@ -235,7 +235,7 @@ func (s *Server) crossOrigin(r *http.Request) (string, bool) {
 	}
 	origin := r.Header.Get("Origin")
 	if origin == "" || origin == "null" {
-		// No browser is claiming this request. curl, the sa command and the
+		// No browser is claiming this request. curl, the sbnn command and the
 		// hooks it runs all land here.
 		return "", origin == "null"
 	}
@@ -247,7 +247,7 @@ func (s *Server) crossOrigin(r *http.Request) (string, bool) {
 
 // ownOrigin reports whether an Origin header names this server. The page is
 // reached by whichever loopback name the user typed, so all of them count,
-// as long as the port is the one sa listens on.
+// as long as the port is the one sbnn listens on.
 func (s *Server) ownOrigin(origin string) bool {
 	u, err := url.Parse(origin)
 	if err != nil || u.Scheme != "http" {
@@ -282,7 +282,7 @@ type Status struct {
 
 func (s *Server) status() Status {
 	st := Status{
-		App:      "sa",
+		App:      "sbnn",
 		Version:  s.opts.Version,
 		Revision: s.opts.Revision,
 		PID:      os.Getpid(),
@@ -388,7 +388,7 @@ type AddDiffRequest struct {
 	// Labels are carried through to the review record untouched.
 	Labels map[string]string `json:"labels,omitempty"`
 	// Collapse names files the sender wants folded away - its generated
-	// ones, whatever those are called here. sa matches the patterns and
+	// ones, whatever those are called here. sbnn matches the patterns and
 	// reads nothing into them.
 	Collapse []string `json:"collapse,omitempty"`
 }
@@ -802,7 +802,7 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 }
 
 // notifyReview tells everyone listening that a review was submitted. An
-// agent waiting with `sa wait` is one of them.
+// agent waiting with `sbnn wait` is one of them.
 func (s *Server) notifyReview(g *model.Group) {
 	msg, err := json.Marshal(map[string]any{
 		"type":       "review",

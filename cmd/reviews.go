@@ -11,8 +11,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/tenntenn/sa/internal/client"
-	"github.com/tenntenn/sa/internal/history"
+	"github.com/tenntenn/sbnn/internal/client"
+	"github.com/tenntenn/sbnn/internal/history"
 )
 
 var (
@@ -36,10 +36,10 @@ long the change waited. A round of review is thrown away as soon as it is
 over - comments cleared, group closed - and this is what stays, so that a
 year of reviews can be read as one thing.
 
-  $ sa reviews                     # newest last, one line each
-  $ sa reviews --since 7d          # this week
-  $ sa reviews -t api --limit 5
-  $ sa reviews --stats             # what they say together, and only then
+  $ sbnn reviews                     # newest last, one line each
+  $ sbnn reviews --since 7d          # this week
+  $ sbnn reviews -t api --limit 5
+  $ sbnn reviews --stats             # what they say together, and only then
 
 --comments turns the stream around: one record per comment instead of one
 per review, which is the shape counting tools want. Parse the jsonl form -
@@ -47,15 +47,15 @@ one flat JSON object per line, fields get added but not renamed. The text
 form is five tab-separated columns (date, group, path:lines, author, first
 line of the body): fine for eyes and quick pipes, lossy by design.
 
-  $ sa reviews --comments --format jsonl | jq -r 'select(.suggestions).path'
-  $ sa reviews --comments | cut -f3 | sort | uniq -c | sort -rn
+  $ sbnn reviews --comments --format jsonl | jq -r 'select(.suggestions).path'
+  $ sbnn reviews --comments | cut -f3 | sort | uniq -c | sort -rn
 
-The log is a JSON object per line, kept at ` + "`$XDG_STATE_HOME/sa/reviews.jsonl`" + `
-unless --history-file or $SA_HISTORY says otherwise, so jq and friends work
+The log is a JSON object per line, kept at ` + "`$XDG_STATE_HOME/sbnn/reviews.jsonl`" + `
+unless --history-file or $SBNN_HISTORY says otherwise, so jq and friends work
 on it directly and it can be read from anywhere:
 
-  $ sa reviews --file team.jsonl               # someone else's
-  $ cat */reviews.jsonl | sa reviews --file -  # several at once
+  $ sbnn reviews --file team.jsonl               # someone else's
+  $ cat */reviews.jsonl | sbnn reviews --file -  # several at once
 
 Keep the log outside the working tree (the default is outside): a log inside
 the tree is appended to on every submit and would dirty the very diff it is
@@ -72,16 +72,16 @@ own.`,
 func init() {
 	f := reviewsCmd.Flags()
 	f.StringVarP(&target, "target", "t", "", "Only the reviews of this group")
-	f.IntVarP(&port, "port", "p", DefaultPort, "Server port (used when sa is running)")
+	f.IntVarP(&port, "port", "p", DefaultPort, "Server port (used when sbnn is running)")
 	f.StringVarP(&bind, "bind", "b", "localhost", "Bind address")
-	f.StringVar(&historyPath, "history-file", "", `Where the log is kept (or $SA_HISTORY)`)
+	f.StringVar(&historyPath, "history-file", "", `Where the log is kept (or $SBNN_HISTORY)`)
 	f.StringVar(&reviewsSince, "since", "", "Only reviews after this: 7d, 36h, 2026-01-31")
 	f.IntVar(&reviewsLimit, "limit", 0, "Keep only the newest n reviews")
 	f.StringVar(&reviewsFormat, "format", "text", "Output format: text, json or jsonl")
 	f.BoolVar(&reviewsStats, "stats", false, "Print what the reviews say together")
 	f.BoolVar(&reviewsComments, "comments", false, "One record per comment instead of one per review")
 	reviewsCmd.MarkFlagsMutuallyExclusive("comments", "stats")
-	f.BoolVar(&reviewsAll, "all", false, "Every group, ignoring --target and $SA_TARGET")
+	f.BoolVar(&reviewsAll, "all", false, "Every group, ignoring --target and $SBNN_TARGET")
 	f.IntVar(&reviewsTop, "top", 5, "How many entries each tally shows")
 	f.BoolVar(&jsonOutput, "json", false, "Shorthand for --format json")
 	f.StringVar(&reviewsFile, "file", "",

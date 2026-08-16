@@ -4,13 +4,13 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/tenntenn/sa/internal/model"
+	"github.com/tenntenn/sbnn/internal/model"
 )
 
 // GapMarker is inserted where the diff does not tell us what the file looks
 // like. Unified diffs only carry the changed hunks and their context, so a
 // modified file can only be reconstructed partially.
-const GapMarker = "<!-- sa: %d line(s) not included in the diff -->"
+const GapMarker = "<!-- sbnn: %d line(s) not included in the diff -->"
 
 // Reconstruct rebuilds the new side of a file from its hunks.
 //

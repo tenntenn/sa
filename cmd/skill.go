@@ -8,7 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/tenntenn/sa/skills"
+	"github.com/tenntenn/sbnn/skills"
 )
 
 var (
@@ -19,34 +19,34 @@ var (
 
 var skillCmd = &cobra.Command{
 	Use:   "skill",
-	Short: "Print or install the agent skill for sa",
-	Long: `Print or install the agent skill bundled with sa.
+	Short: "Print or install the agent skill for sbnn",
+	Long: `Print or install the agent skill bundled with sbnn.
 
 The skill is vendor neutral: it is a plain Markdown file with YAML front
-matter that describes the sa review workflow in terms of the sa command line,
+matter that describes the sbnn review workflow in terms of the sbnn command line,
 so any coding agent can use it. Install it where your agent looks for skills,
 or point at it from AGENTS.md.
 
-  $ sa skill                                   # print SKILL.md
-  $ sa skill --list                            # list the files of the skill
-  $ sa skill --install .claude/skills          # this project only
-  $ sa skill --install ~/.claude/skills        # all your projects
-  $ sa skill --install .agents/skills          # then link it from AGENTS.md
-  $ sa skill --install ~/.claude/skills --force  # replace an older copy
+  $ sbnn skill                                   # print SKILL.md
+  $ sbnn skill --list                            # list the files of the skill
+  $ sbnn skill --install .claude/skills          # this project only
+  $ sbnn skill --install ~/.claude/skills        # all your projects
+  $ sbnn skill --install .agents/skills          # then link it from AGENTS.md
+  $ sbnn skill --install ~/.claude/skills --force  # replace an older copy
 
---install writes the skill as a "sa" directory inside the directory you name
-(<dir>/sa/SKILL.md) and refuses to overwrite an existing file without --force.
+--install writes the skill as a "sbnn" directory inside the directory you name
+(<dir>/sbnn/SKILL.md) and refuses to overwrite an existing file without --force.
 
 For an agent that reads AGENTS.md instead of a skills directory, install the
 file anywhere and point at it:
 
   ## Reviewing changes
 
-  Before showing a diff to a human, read .agents/skills/sa/SKILL.md.
+  Before showing a diff to a human, read .agents/skills/sbnn/SKILL.md.
 
-An agent with no skill support at all can be told about sa directly:
+An agent with no skill support at all can be told about sbnn directly:
 
-  $ sa skill >> AGENTS.md`,
+  $ sbnn skill >> AGENTS.md`,
 	Args:         cobra.NoArgs,
 	RunE:         runSkill,
 	SilenceUsage: true,
@@ -82,7 +82,7 @@ func runSkill(_ *cobra.Command, _ []string) error {
 }
 
 // installSkill copies the embedded skill into dir, keeping its directory
-// name so that it lands as <dir>/sa/SKILL.md.
+// name so that it lands as <dir>/sbnn/SKILL.md.
 func installSkill(dir string) error {
 	root, err := filepath.Abs(dir)
 	if err != nil {
@@ -109,13 +109,13 @@ func installSkill(dir string) error {
 		if err := os.WriteFile(dst, b, 0o644); err != nil {
 			return err
 		}
-		fmt.Fprintln(os.Stderr, "sa: wrote", dst)
+		fmt.Fprintln(os.Stderr, "sbnn: wrote", dst)
 		written++
 		return nil
 	})
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(os.Stderr, "sa: installed the sa skill (%d file(s)) into %s\n", written, root)
+	fmt.Fprintf(os.Stderr, "sbnn: installed the sbnn skill (%d file(s)) into %s\n", written, root)
 	return nil
 }

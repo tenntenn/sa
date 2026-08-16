@@ -26,8 +26,8 @@ const SIDEBAR_DEFAULT = 280
 const SIDEBAR_MAX = 720
 const SIDEBAR_SNAP = 48
 const SIDEBAR_STEP = 24
-const SIDEBAR_KEY = 'sa.sidebar.width'
-const SPLIT_KEY = 'sa.split'
+const SIDEBAR_KEY = 'sbnn.sidebar.width'
+const SPLIT_KEY = 'sbnn.split'
 
 function storedSplitRatio(): number {
   const stored = readSetting(SPLIT_KEY)
@@ -178,7 +178,7 @@ export function App() {
     }
   }
 
-  // The review is what anything waiting on sa is waiting for, so saying "I
+  // The review is what anything waiting on sbnn is waiting for, so saying "I
   // am done" is an explicit act rather than a guess from the last comment.
   const summary = status?.groups.find((g) => g.name === group)
   const reviewed = summary ? summary.reviewed : reviewedAt !== null
@@ -372,16 +372,16 @@ export function App() {
   const welcome = (
     <div className="welcome">
       <h1>{client.isStatic ? 'This page carries no diff' : 'Waiting for a diff'}</h1>
-      <p>Pipe one in — sa adds it to this page:</p>
+      <p>Pipe one in — sbnn adds it to this page:</p>
       <pre>
         <code>
-          git diff | sa{group === 'default' ? '' : ` --target ${group}`}
-          {'\n'}diff -u old.md new.md | sa{group === 'default' ? '' : ` --target ${group}`}
+          git diff | sbnn{group === 'default' ? '' : ` --target ${group}`}
+          {'\n'}diff -u old.md new.md | sbnn{group === 'default' ? '' : ` --target ${group}`}
         </code>
       </pre>
       <p className="hint">
         Comments you leave here are readable from the command line with{' '}
-        <code>sa comments{group === 'default' ? '' : ` -t ${group}`}</code>.
+        <code>sbnn comments{group === 'default' ? '' : ` -t ${group}`}</code>.
       </p>
     </div>
   )
@@ -389,7 +389,7 @@ export function App() {
   return (
     <div className={`app${narrow ? ' narrow' : ''}`}>
       <header className="topbar">
-        <span className="brand">sa</span>
+        <span className="brand">sbnn</span>
         <span className="group">{group}</span>
         <span className="hint counts">
           {diffs.length} diff(s) · {comments.length} comment(s)
@@ -399,7 +399,7 @@ export function App() {
           <span
             className="badge"
             title={
-              'This page was written with `sa export`. The diff is frozen and ' +
+              'This page was written with `sbnn export`. The diff is frozen and ' +
               'comments are kept in this browser.'
             }
           >
@@ -420,7 +420,7 @@ export function App() {
             onClick={() => setReviewNote((note) => (note === null ? '' : null))}
             title={
               hooks > 0
-                ? `Submitting runs ${hooks} hook(s) on the sa server`
+                ? `Submitting runs ${hooks} hook(s) on the sbnn server`
                 : 'Tell whoever is waiting that the review is done'
             }
           >
@@ -503,11 +503,11 @@ export function App() {
 
       {reviewNote !== null && (
         <div className="review-form">
-          <label className="field-label" htmlFor="sa-review-note">
+          <label className="field-label" htmlFor="sbnn-review-note">
             Anything to say about the change as a whole? (optional)
           </label>
           <textarea
-            id="sa-review-note"
+            id="sbnn-review-note"
             className="comment-input"
             autoFocus
             rows={3}
@@ -550,8 +550,8 @@ export function App() {
             </button>
             <span className="hint">
               {hooks > 0
-                ? `${hooks} hook(s) will run on the sa server`
-                : 'Anything waiting with `sa wait` carries on'}
+                ? `${hooks} hook(s) will run on the sbnn server`
+                : 'Anything waiting with `sbnn wait` carries on'}
             </span>
           </div>
         </div>
@@ -634,7 +634,7 @@ export function App() {
 
 /** staticGroupName reads the group an exported page was written for. */
 function staticGroupName(): string {
-  return window.__SA_DATA__?.group ?? 'default'
+  return window.__SBNN_DATA__?.group ?? 'default'
 }
 
 /** verdictLabel says what a finished review decided, on the button that

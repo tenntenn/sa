@@ -3,14 +3,14 @@ package server
 import (
 	"testing"
 
-	"github.com/tenntenn/sa/internal/diff"
-	"github.com/tenntenn/sa/internal/model"
+	"github.com/tenntenn/sbnn/internal/diff"
+	"github.com/tenntenn/sbnn/internal/model"
 )
 
 // What counts as a file declaring itself generated. Everything here is the
 // file speaking: a generator wrote the line so tools would leave it alone.
 // Anything else - a big file, a name that looks generated, a vendor
-// directory - is sa guessing, and a wrong guess folds code nobody then
+// directory - is sbnn guessing, and a wrong guess folds code nobody then
 // reads.
 func TestGeneratedMarkerIsASelfDeclaration(t *testing.T) {
 	declares := []string{

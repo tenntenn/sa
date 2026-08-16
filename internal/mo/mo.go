@@ -1,6 +1,6 @@
 // Package mo drives the mo Markdown viewer (https://github.com/k1LoW/mo).
 //
-// sa does not render Markdown itself. It hands the file to mo, which keeps
+// sbnn does not render Markdown itself. It hands the file to mo, which keeps
 // its own resident server, and embeds the resulting page next to the diff.
 //
 // mo cannot be used as a Go library: everything but its cobra entry point
@@ -41,7 +41,7 @@ const InstallHint = "install mo with `brew install k1LoW/tap/mo`, " +
 type Runner struct {
 	// Bin is the mo executable, "mo" by default.
 	Bin string
-	// Port and Bind describe the mo server sa talks to.
+	// Port and Bind describe the mo server sbnn talks to.
 	Port int
 	Bind string
 }

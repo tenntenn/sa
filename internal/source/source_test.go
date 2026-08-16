@@ -6,11 +6,11 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/tenntenn/sa/internal/model"
-	"github.com/tenntenn/sa/internal/source"
+	"github.com/tenntenn/sbnn/internal/model"
+	"github.com/tenntenn/sbnn/internal/source"
 )
 
-// A diff is text sa did not write. A path that climbs out of the directory
+// A diff is text sbnn did not write. A path that climbs out of the directory
 // the diff was sent from is refused, because whatever is read here is shown
 // in the preview and baked into exported pages.
 func TestAbsPathRefusesToLeaveTheBaseDir(t *testing.T) {

@@ -1,8 +1,8 @@
-// Package version carries the build information of sa.
+// Package version carries the build information of sbnn.
 package version
 
-// Version is the sa version, overridden at release time.
+// Version is the sbnn version, overridden at release time.
 var Version = "dev"
 
-// Revision is the commit sa was built from.
+// Revision is the commit sbnn was built from.
 var Revision = "HEAD"

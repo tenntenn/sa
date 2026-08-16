@@ -4,7 +4,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/tenntenn/sa/internal/model"
+	"github.com/tenntenn/sbnn/internal/model"
 )
 
 // generatedTop is how far into a file the declaration is looked for. The
@@ -16,8 +16,8 @@ const generatedTop = 10
 //
 // Every one of them is the file speaking about itself: a generator wrote the
 // line so that tools would leave the file alone. That is what makes folding
-// such a file honest, and it is why sa looks for nothing else - not a size,
-// not a directory, not a name. Those would be sa guessing about a project it
+// such a file honest, and it is why sbnn looks for nothing else - not a size,
+// not a directory, not a name. Those would be sbnn guessing about a project it
 // knows nothing about, and a wrong guess hides code from a review.
 var generatedMarkers = []*regexp.Regexp{
 	// The Go convention, also emitted by many tools outside Go.

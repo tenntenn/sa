@@ -9,8 +9,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/tenntenn/sa/internal/client"
-	"github.com/tenntenn/sa/internal/server"
+	"github.com/tenntenn/sbnn/internal/client"
+	"github.com/tenntenn/sbnn/internal/server"
 )
 
 var (
@@ -29,25 +29,25 @@ var waitCmd = &cobra.Command{
 The server pushes the notice over its event stream, so nothing is polled and
 nothing is missed:
 
-  $ git diff | sa --target api
-  $ sa wait --target api          # returns when "Submit review" is pressed
-  $ sa comments --target api      # ... or read them yourself afterwards
+  $ git diff | sbnn --target api
+  $ sbnn wait --target api          # returns when "Submit review" is pressed
+  $ sbnn comments --target api      # ... or read them yourself afterwards
 
-A review that was already submitted for the diffs sa holds returns straight
+A review that was already submitted for the diffs sbnn holds returns straight
 away, so waiting is safe to retry.
 
 Waiting only helps while you are still around. When the review might land
 after you are gone - a meeting, a night, a session that times out - register
 what to do instead and let the server start it:
 
-  $ git diff | sa --on-review 'claude -p "$(sa comments)"'
+  $ git diff | sbnn --on-review 'claude -p "$(sbnn comments)"'
 
 --timeout gives up after a while and exits with status 2, which tells a
 caller "not reviewed yet" as opposed to "something went wrong". With
 --exit-code, a review that left comments exits 1 and a clean one exits 0, so
 a pipeline can carry on by itself:
 
-  $ git diff | sa && sa wait -q && git commit -m "..."`,
+  $ git diff | sbnn && sbnn wait -q && git commit -m "..."`,
 	Args:         cobra.NoArgs,
 	RunE:         runWait,
 	SilenceUsage: true,
@@ -55,7 +55,7 @@ a pipeline can carry on by itself:
 
 func init() {
 	f := waitCmd.Flags()
-	f.StringVarP(&target, "target", "t", "", "Group name (default \"default\", or $SA_TARGET)")
+	f.StringVarP(&target, "target", "t", "", "Group name (default \"default\", or $SBNN_TARGET)")
 	f.IntVarP(&port, "port", "p", DefaultPort, "Server port")
 	f.StringVarP(&bind, "bind", "b", "localhost", "Bind address")
 	f.DurationVar(&waitTimeout, "timeout", 0, "Give up after this long (0 waits forever)")
@@ -78,7 +78,7 @@ func runWait(cmd *cobra.Command, _ []string) error {
 	}
 	c := client.New(addr(), 10*time.Second)
 	if _, err := c.Status(ctx); err != nil {
-		return fmt.Errorf("no sa server found on %s", c.Addr)
+		return fmt.Errorf("no sbnn server found on %s", c.Addr)
 	}
 
 	g, err := c.Group(ctx, group)
@@ -95,17 +95,17 @@ func runWait(cmd *cobra.Command, _ []string) error {
 		ctx, cancel = context.WithTimeout(ctx, waitTimeout)
 		defer cancel()
 	}
-	fmt.Fprintf(os.Stderr, "sa: waiting for the review of %s\n", server.GroupURL(c.BaseURL(), group))
+	fmt.Fprintf(os.Stderr, "sbnn: waiting for the review of %s\n", server.GroupURL(c.BaseURL(), group))
 
 	notice, err := c.WaitForReview(ctx, group)
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) {
-			fmt.Fprintf(os.Stderr, "sa: no review after %s\n", waitTimeout)
+			fmt.Fprintf(os.Stderr, "sbnn: no review after %s\n", waitTimeout)
 			os.Exit(exitNotReviewed)
 		}
 		return err
 	}
-	fmt.Fprintf(os.Stderr, "sa: review submitted, %d open comment(s)\n", notice.Comments)
+	fmt.Fprintf(os.Stderr, "sbnn: review submitted, %d open comment(s)\n", notice.Comments)
 	return printReview(ctx, c, group)
 }
 
@@ -118,7 +118,7 @@ func exitReview(ctx context.Context, c *client.Client, group string) error {
 	return exitWithVerdict(g.ReviewVerdict, g.Comments)
 }
 
-// printReview writes the review the same way `sa comments` does.
+// printReview writes the review the same way `sbnn comments` does.
 func printReview(ctx context.Context, c *client.Client, group string) error {
 	if waitQuiet {
 		return exitReview(ctx, c, group)

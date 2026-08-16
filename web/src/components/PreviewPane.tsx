@@ -20,18 +20,18 @@ interface Props {
   onSync?: (on: boolean) => void
 }
 
-/** PreviewKind is which of the two previews is showing. sa renders one
+/** PreviewKind is which of the two previews is showing. sbnn renders one
  * itself; mo is the other, richer one, in a frame. */
 export type PreviewKind = 'preview' | 'mo'
 
-const RENDERER_KEY = 'sa.preview.renderer'
+const RENDERER_KEY = 'sbnn.preview.renderer'
 
 /**
  * PreviewPane shows the Markdown preview next to the diff.
  *
  * In the live app the preview is rendered by mo. mo forbids framing with
- * "frame-ancestors 'none'", so sa serves it through its own loopback proxy,
- * which relaxes that one directive for sa's origin. An exported page has no
+ * "frame-ancestors 'none'", so sbnn serves it through its own loopback proxy,
+ * which relaxes that one directive for sbnn's origin. An exported page has no
  * mo behind it and renders the frozen Markdown itself.
  *
  * A phone does the same: mo keeps its own sidebar inside the frame, which
@@ -54,7 +54,7 @@ export function PreviewPane({
   const [reloadKey, setReloadKey] = useState(0)
   const [openingMo, setOpeningMo] = useState(false)
 
-  // Which preview to use is the reader's to choose. sa's own is the
+  // Which preview to use is the reader's to choose. sbnn's own is the
   // default: it needs nothing installed, it follows the diff as it scrolls,
   // and it is drawn in this page rather than in a frame. mo renders more,
   // and is one click away. A phone and an exported page have no embedded mo
@@ -168,7 +168,7 @@ export function PreviewPane({
         {!forced && (
           <div
             className="toggle"
-            title="sa draws the preview itself and it can follow the diff; mo renders more, in a frame"
+            title="sbnn draws the preview itself and it can follow the diff; mo renders more, in a frame"
           >
             <button
               className={kind === 'preview' ? 'active' : ''}
@@ -186,7 +186,7 @@ export function PreviewPane({
             className="switch"
             title={
               !renderHere
-                ? "Only sa's own preview can follow the diff: mo is framed from another origin, where a page may not touch its scrolling"
+                ? "Only sbnn's own preview can follow the diff: mo is framed from another origin, where a page may not touch its scrolling"
                 : sync
                   ? 'The preview follows the diff; scrolling it yourself stops that'
                   : 'Follow the diff again'
@@ -227,7 +227,7 @@ export function PreviewPane({
           <p className="error">{error}</p>
           {status && !status.moAvailable && (
             <p className="hint">
-              mo renders a richer preview than sa's own, and it is not installed here. Install it
+              mo renders a richer preview than sbnn's own, and it is not installed here. Install it
               with <code>brew install k1LoW/tap/mo</code> or grab a binary from{' '}
               <a href="https://github.com/k1LoW/mo/releases" target="_blank" rel="noreferrer">
                 the releases page

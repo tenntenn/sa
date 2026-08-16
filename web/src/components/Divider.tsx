@@ -11,7 +11,7 @@ interface Props {
 }
 
 /**
- * Divider is the draggable edge between two panes. Every pane in sa is
+ * Divider is the draggable edge between two panes. Every pane in sbnn is
  * resized with one, so they all behave the same: drag to resize, double click
  * to put the pane away or bring it back, arrow keys once it has focus.
  *

@@ -18,7 +18,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tenntenn/sa/internal/model"
+	"github.com/tenntenn/sbnn/internal/model"
 )
 
 // Record is one submitted review.
@@ -109,7 +109,7 @@ func FromGroup(g *model.Group) Record {
 }
 
 // Append writes a record to the log, one JSON object per line so that the
-// file stays readable by anything, sa included.
+// file stays readable by anything, sbnn included.
 func Append(path string, rec Record) error {
 	if path == "" {
 		return nil

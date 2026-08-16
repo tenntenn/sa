@@ -8,8 +8,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/tenntenn/sa/internal/client"
-	"github.com/tenntenn/sa/internal/model"
+	"github.com/tenntenn/sbnn/internal/client"
+	"github.com/tenntenn/sbnn/internal/model"
 )
 
 var (
@@ -21,26 +21,26 @@ var (
 var hookCmd = &cobra.Command{
 	Use:   "hook",
 	Short: "Run something when the review is submitted",
-	Long: `List, add or drop what sa does when a review is submitted.
+	Long: `List, add or drop what sbnn does when a review is submitted.
 
 A review often lands long after whoever asked for it stopped waiting: the
 reviewer was in a meeting, the agent session timed out. A hook is the way
-round that - the sa server starts the work when the human presses "Submit
+round that - the sbnn server starts the work when the human presses "Submit
 review", with nobody waiting in between.
 
-  $ sa hook --on-review 'claude -p "$(sa comments)"'
-  $ sa hook --on-review-url http://localhost:9000/reviews
-  $ sa hook                       # what is registered
-  $ sa hook --clear               # forget it
+  $ sbnn hook --on-review 'claude -p "$(sbnn comments)"'
+  $ sbnn hook --on-review-url http://localhost:9000/reviews
+  $ sbnn hook                       # what is registered
+  $ sbnn hook --clear               # forget it
 
 The command runs through the shell with the review prompt on its stdin and
-these variables set: SA_GROUP, SA_URL, SA_SERVER, SA_PORT, SA_COMMENTS and
-SA_REVIEW_NOTE. The URL is sent the same thing as JSON.
+these variables set: SBNN_GROUP, SBNN_URL, SBNN_SERVER, SBNN_PORT, SBNN_COMMENTS and
+SBNN_REVIEW_NOTE. The URL is sent the same thing as JSON.
 
 Hooks belong to a group, survive a restart, and can also be registered while
 sending the diff:
 
-  $ git diff | sa --target api --on-review 'notify-send "review is in"'
+  $ git diff | sbnn --target api --on-review 'notify-send "review is in"'
 
 A hook runs a command of your own on your own machine, which is exactly what
 makes it useful and worth being deliberate about.`,
@@ -51,7 +51,7 @@ makes it useful and worth being deliberate about.`,
 
 func init() {
 	f := hookCmd.Flags()
-	f.StringVarP(&target, "target", "t", "", "Group name (default \"default\", or $SA_TARGET)")
+	f.StringVarP(&target, "target", "t", "", "Group name (default \"default\", or $SBNN_TARGET)")
 	f.IntVarP(&port, "port", "p", DefaultPort, "Server port")
 	f.StringVarP(&bind, "bind", "b", "localhost", "Bind address")
 	f.StringVar(&hookCommand, "on-review", "", "Shell command to run when a review is submitted")
@@ -68,7 +68,7 @@ func runHook(cmd *cobra.Command, _ []string) error {
 	}
 	c := client.New(addr(), 5*time.Second)
 	if _, err := c.Status(ctx); err != nil {
-		return fmt.Errorf("no sa server found on %s", c.Addr)
+		return fmt.Errorf("no sbnn server found on %s", c.Addr)
 	}
 
 	switch {
@@ -77,7 +77,7 @@ func runHook(cmd *cobra.Command, _ []string) error {
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(os.Stderr, "sa: removed %d hook(s) from group %q\n", removed, group)
+		fmt.Fprintf(os.Stderr, "sbnn: removed %d hook(s) from group %q\n", removed, group)
 		return nil
 	case hookCommand != "" || hookURL != "":
 		added, err := c.AddHook(ctx, group, model.Hook{Command: hookCommand, URL: hookURL})
@@ -87,7 +87,7 @@ func runHook(cmd *cobra.Command, _ []string) error {
 		if jsonOutput {
 			return jsonEncoder(os.Stdout).Encode(added)
 		}
-		fmt.Fprintf(os.Stderr, "sa: %s will run when the review of %q is submitted\n",
+		fmt.Fprintf(os.Stderr, "sbnn: %s will run when the review of %q is submitted\n",
 			describeHook(added), group)
 		return nil
 	default:
@@ -134,7 +134,7 @@ func registerHooks(ctx context.Context, c *client.Client, group string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(os.Stderr, "sa: %s will run when the review of %q is submitted\n",
+	fmt.Fprintf(os.Stderr, "sbnn: %s will run when the review of %q is submitted\n",
 		describeHook(added), group)
 	return nil
 }

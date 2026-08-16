@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/tenntenn/sa/internal/model"
+	"github.com/tenntenn/sbnn/internal/model"
 )
 
 // hookTimeout bounds a hook, so that a command waiting for something never
@@ -79,12 +79,12 @@ func (s *Server) runHookCommand(ctx context.Context, h *model.Hook, event Review
 	cmd := exec.CommandContext(ctx, shell, flag, h.Command)
 	cmd.Stdin = bytes.NewReader([]byte(event.Prompt))
 	cmd.Env = append(cmd.Environ(),
-		"SA_GROUP="+event.Group,
-		"SA_URL="+event.URL,
-		"SA_SERVER="+s.BaseURL(),
-		"SA_PORT="+strconv.Itoa(s.opts.Port),
-		"SA_COMMENTS="+strconv.Itoa(len(event.Comments)),
-		"SA_REVIEW_NOTE="+event.Note,
+		"SBNN_GROUP="+event.Group,
+		"SBNN_URL="+event.URL,
+		"SBNN_SERVER="+s.BaseURL(),
+		"SBNN_PORT="+strconv.Itoa(s.opts.Port),
+		"SBNN_COMMENTS="+strconv.Itoa(len(event.Comments)),
+		"SBNN_REVIEW_NOTE="+event.Note,
 	)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
