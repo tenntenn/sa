@@ -84,10 +84,11 @@ New files:
   A new file has no left hand side, so it is always shown as a unified diff.
 
 Markdown preview:
-  Markdown files are previewed with mo (https://github.com/k1LoW/mo) in a
-  split pane next to the diff. The working tree file is previewed when it
-  exists; otherwise sa reconstructs the new side from the diff itself.
-  mo has to be installed: ` + mo.InstallHint + `.
+  Markdown files are previewed in a split pane next to the diff. sa renders
+  the preview itself, and mo (https://github.com/k1LoW/mo) renders a richer
+  one for those who install it - the page has a switch for the two. The
+  working tree file is previewed when it exists; otherwise sa reconstructs
+  the new side from the diff itself. For mo: ` + mo.InstallHint + `.
 
 Review comments:
   Comments can be attached to lines in the browser. They are stored by the
@@ -233,7 +234,7 @@ func run(cmd *cobra.Command, _ []string) error {
 	}
 
 	c := client.New(addr(), 5*time.Second)
-	status, started, err := ensureServer(ctx, c)
+	_, started, err := ensureServer(ctx, c)
 	if err != nil {
 		return err
 	}
@@ -257,9 +258,10 @@ func run(cmd *cobra.Command, _ []string) error {
 		out.URL = res.URL
 		out.Diff = summarize(res)
 	}
-	if status != nil && !status.MoAvailable && content != "" && out.Diff != nil && out.Diff.MarkdownFiles > 0 {
-		fmt.Fprintf(os.Stderr, "sa: Markdown preview needs mo: %s\n", mo.InstallHint)
-	}
+	// mo used to be what previewed Markdown, and its absence was worth a
+	// warning. sa renders the preview itself now, so nothing is missing:
+	// whoever wants mo's richer one is told how to get it in the page,
+	// where they ask for it.
 
 	out.print()
 	if shouldOpen(started) {

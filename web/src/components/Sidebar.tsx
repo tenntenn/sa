@@ -1,7 +1,13 @@
-import type { RefObject } from 'react'
+import { useEffect, useState, type RefObject } from 'react'
 import type { Comment, Diff, FileDiff, Status } from '../types'
 import { filePath } from '../types'
 import { client } from '../client'
+import { readSetting, writeSetting } from '../storage'
+
+/** Layout is how the rounds are shown: stacked, or one tab at a time. */
+type Layout = 'list' | 'tabs'
+
+const LAYOUT_KEY = 'sa.sidebar.layout'
 
 /**
  * matchesPath reports whether a path answers a search.
@@ -53,9 +59,51 @@ export function Sidebar({
   const commentCount = (diffId: string, fileId: string) =>
     comments.filter((c) => c.diffId === diffId && c.fileId === fileId && !c.resolved).length
 
+  // A shut group still says how much is waiting inside it.
+  const groupComments = (diff: Diff): number =>
+    comments.filter((c) => c.diffId === diff.id && !c.resolved).length
+
+  // Rounds pile up: a review of four diffs is four headings and everything
+  // under them. A group can be shut, and the whole list can be turned into
+  // tabs, which shows one round at a time.
+  const [layout, setLayout] = useState<Layout>(
+    () => (readSetting(LAYOUT_KEY) === 'tabs' ? 'tabs' : 'list'),
+  )
+  const [shutGroups, setShutGroups] = useState<Set<string>>(() => new Set())
+  const [tab, setTab] = useState<string | null>(null)
+
+  useEffect(() => {
+    writeSetting(LAYOUT_KEY, layout)
+  }, [layout])
+
   const shown = (diff: Diff): FileDiff[] => diff.files.filter((f) => matchesPath(filePath(f), query))
   const total = diffs.reduce((n, d) => n + d.files.length, 0)
   const found = diffs.reduce((n, d) => n + shown(d).length, 0)
+
+  // The tab in front is the one holding the selected file, so picking a
+  // file from anywhere - a keyboard step, a comment - brings its round
+  // forward rather than leaving the reader on a tab that shows nothing.
+  const activeTab = diffs.find((d) => d.id === selected?.diffId)?.id ?? tab ?? diffs[0]?.id ?? null
+
+  // A search is about the whole review, not about one round, so it opens
+  // everything it matched.
+  const searching = query !== ''
+  const visible = (diff: Diff): boolean => {
+    if (shown(diff).length === 0) return false
+    if (searching) return true
+    if (layout === 'tabs') return diff.id === activeTab
+    return true
+  }
+  const isShut = (diff: Diff): boolean =>
+    layout === 'list' && !searching && shutGroups.has(diff.id)
+
+  const toggleGroup = (id: string) =>
+    setShutGroups((current) => {
+      const next = new Set(current)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
 
   // Enter takes you to the first path still standing, which is the whole
   // point of typing into a list.
@@ -100,17 +148,84 @@ export function Sidebar({
               {found} of {total}
             </span>
           )}
+          {diffs.length > 1 && (
+            <div className="toggle sm" title="Stack the rounds, or show one at a time">
+              <button
+                className={layout === 'list' ? 'active' : ''}
+                onClick={() => setLayout('list')}
+              >
+                list
+              </button>
+              <button
+                className={layout === 'tabs' ? 'active' : ''}
+                onClick={() => setLayout('tabs')}
+              >
+                tabs
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {layout === 'tabs' && !searching && diffs.length > 1 && (
+        <div className="diff-tabs" role="tablist">
+          {diffs.map((diff) => (
+            <button
+              key={diff.id}
+              role="tab"
+              aria-selected={diff.id === activeTab}
+              className={`diff-tab${diff.id === activeTab ? ' active' : ''}`}
+              title={new Date(diff.createdAt).toLocaleString()}
+              onClick={() => {
+                setTab(diff.id)
+                const first = shown(diff)[0]
+                if (first) onSelect(diff.id, first.id)
+              }}
+            >
+              {diff.title}
+              {groupComments(diff) > 0 && <span className="badge sm warn">{groupComments(diff)}</span>}
+              {!client.isStatic && diff.id === activeTab && (
+                <span
+                  className="tab-remove"
+                  role="button"
+                  title="Remove this diff"
+                  onClick={(ev) => {
+                    ev.stopPropagation()
+                    void client.deleteDiff(group, diff.id).then(onChanged)
+                  }}
+                >
+                  ×
+                </span>
+              )}
+            </button>
+          ))}
         </div>
       )}
 
       {query !== '' && found === 0 && <p className="empty">No path contains that.</p>}
 
       {diffs.map((diff) => (
-        <div className="diff-group" key={diff.id} hidden={shown(diff).length === 0}>
-          <div className="diff-group-header">
-            <span className="diff-group-title" title={new Date(diff.createdAt).toLocaleString()}>
-              {diff.title}
-            </span>
+        <div className="diff-group" key={diff.id} hidden={!visible(diff)}>
+          <div className="diff-group-header" hidden={layout === 'tabs' && !searching}>
+            {layout === 'list' && !searching ? (
+              <button
+                className="diff-group-title as-button"
+                title={new Date(diff.createdAt).toLocaleString()}
+                aria-expanded={!isShut(diff)}
+                onClick={() => toggleGroup(diff.id)}
+              >
+                <span className="disclosure">{isShut(diff) ? '▸' : '▾'}</span>
+                {diff.title}
+                <span className="hint">{shown(diff).length}</span>
+                {groupComments(diff) > 0 && (
+                  <span className="badge sm warn">{groupComments(diff)}</span>
+                )}
+              </button>
+            ) : (
+              <span className="diff-group-title" title={new Date(diff.createdAt).toLocaleString()}>
+                {diff.title}
+              </span>
+            )}
             {!client.isStatic && (
               <button
                 className="ghost danger"
@@ -123,7 +238,7 @@ export function Sidebar({
               </button>
             )}
           </div>
-          <ul className="file-list">
+          <ul className="file-list" hidden={isShut(diff)}>
             {shown(diff).map((file) => {
               const active = selected?.diffId === diff.id && selected.fileId === file.id
               const count = commentCount(diff.id, file.id)

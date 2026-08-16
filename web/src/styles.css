@@ -1143,3 +1143,66 @@ a {
 .preview-header .badge {
   flex-shrink: 0;
 }
+
+/* A round can be shut, so its heading is a button; and the whole list can
+   become tabs, which shows one round at a time. */
+.diff-group-title.as-button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+.diff-group-title.as-button:hover {
+  color: var(--fg);
+}
+.disclosure {
+  width: 0.8em;
+  flex: none;
+}
+.diff-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 6px 6px 0;
+  overflow-x: auto;
+}
+.diff-tab {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-bottom: 0;
+  border-radius: 6px 6px 0 0;
+  background: var(--bg-soft);
+  color: var(--fg-muted);
+  font: inherit;
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.diff-tab.active {
+  background: var(--bg);
+  color: var(--fg);
+}
+.toggle.sm button {
+  padding: 2px 7px;
+  font-size: 11px;
+}
+
+.tab-remove {
+  color: var(--fg-muted);
+  padding: 0 2px;
+}
+.tab-remove:hover {
+  color: var(--danger, #cf222e);
+}

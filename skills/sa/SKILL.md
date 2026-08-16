@@ -33,9 +33,9 @@ user how to install it instead of guessing at a substitute:
 go install github.com/tenntenn/sa@latest
 ```
 
-Markdown preview inside sa is provided by `mo`, which is optional and only
-needed when the diff touches Markdown:
-`brew install k1LoW/tap/mo` (or a binary from
+sa renders the Markdown preview itself, so nothing else is needed. `mo`
+renders a richer one for those who install it, and the reader picks which in
+the preview header: `brew install k1LoW/tap/mo` (or a binary from
 https://github.com/k1LoW/mo/releases).
 
 ## Workflow

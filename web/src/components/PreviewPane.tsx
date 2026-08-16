@@ -20,8 +20,9 @@ interface Props {
   onSync?: (on: boolean) => void
 }
 
-/** PreviewKind is which of the two previews is showing. */
-export type PreviewKind = 'mo' | 'simple'
+/** PreviewKind is which of the two previews is showing. sa renders one
+ * itself; mo is the other, richer one, in a frame. */
+export type PreviewKind = 'preview' | 'mo'
 
 const RENDERER_KEY = 'sa.preview.renderer'
 
@@ -53,16 +54,18 @@ export function PreviewPane({
   const [reloadKey, setReloadKey] = useState(0)
   const [openingMo, setOpeningMo] = useState(false)
 
-  // Which preview to use is the reader's to choose: mo is the full one, and
-  // the simple one is rendered by this page, which is what lets the diff
-  // scroll it. A phone and an exported page have no embedded mo to choose.
+  // Which preview to use is the reader's to choose. sa's own is the
+  // default: it needs nothing installed, it follows the diff as it scrolls,
+  // and it is drawn in this page rather than in a frame. mo renders more,
+  // and is one click away. A phone and an exported page have no embedded mo
+  // to choose between.
   const [chosen, setChosen] = useState<PreviewKind>(
-    () => (readSetting(RENDERER_KEY) === 'simple' ? 'simple' : 'mo'),
+    () => (readSetting(RENDERER_KEY) === 'mo' ? 'mo' : 'preview'),
   )
   const forced = narrow || client.isStatic
-  const kind: PreviewKind = forced ? 'simple' : chosen
+  const kind: PreviewKind = forced ? 'preview' : chosen
   const previewable = file !== null && file.isMarkdown && diffId !== null
-  const renderHere = kind === 'simple'
+  const renderHere = kind === 'preview'
   const body = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -163,12 +166,18 @@ export function PreviewPane({
         )}
         <span className="spacer" />
         {!forced && (
-          <div className="toggle" title="mo renders the full preview; the simple one is drawn by this page and can follow the diff">
+          <div
+            className="toggle"
+            title="sa draws the preview itself and it can follow the diff; mo renders more, in a frame"
+          >
+            <button
+              className={kind === 'preview' ? 'active' : ''}
+              onClick={() => setChosen('preview')}
+            >
+              preview
+            </button>
             <button className={kind === 'mo' ? 'active' : ''} onClick={() => setChosen('mo')}>
               mo
-            </button>
-            <button className={kind === 'simple' ? 'active' : ''} onClick={() => setChosen('simple')}>
-              simple
             </button>
           </div>
         )}
@@ -177,7 +186,7 @@ export function PreviewPane({
             className="switch"
             title={
               !renderHere
-                ? 'Only the simple preview can follow the diff: mo is framed from another origin, where a page may not touch its scrolling'
+                ? "Only sa's own preview can follow the diff: mo is framed from another origin, where a page may not touch its scrolling"
                 : sync
                   ? 'The preview follows the diff; scrolling it yourself stops that'
                   : 'Follow the diff again'
@@ -218,12 +227,12 @@ export function PreviewPane({
           <p className="error">{error}</p>
           {status && !status.moAvailable && (
             <p className="hint">
-              The Markdown preview is rendered by mo. Install it with{' '}
-              <code>brew install k1LoW/tap/mo</code> or grab a binary from{' '}
+              mo renders a richer preview than sa's own, and it is not installed here. Install it
+              with <code>brew install k1LoW/tap/mo</code> or grab a binary from{' '}
               <a href="https://github.com/k1LoW/mo/releases" target="_blank" rel="noreferrer">
                 the releases page
               </a>
-              , then reload.
+              , then reload — or switch back to <strong>preview</strong>, which needs nothing.
             </p>
           )}
         </div>

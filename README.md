@@ -101,14 +101,19 @@ $ sa comments -t default   # the flag still wins
   Enter opens the first path still standing, Escape clears. Nothing turns up
   that does not contain what you typed — a list you are scanning is the wrong
   place for clever matching.
+- Each round of a review is a group in the file list. Click its heading to
+  shut it — the heading keeps saying how many files and how many open
+  comments are inside — or switch the list to **tabs** to see one round at a
+  time. Filtering by path looks through every round either way.
 - Every pane is resizable and can be minimised away: drag the edge between
   two panes, double click it to reset (or to put the file list away), or use
   the **Files**, **Diff** and **Preview** switches in the header. Dragging an
   edge all the way in minimises that pane, and dragging it back out or double
   clicking brings it back. The layout is remembered per browser.
-- Markdown files get a preview pane, rendered either by **mo** or by the
-  page itself (**simple**) — the toggle is in the preview header, and the
-  choice is remembered. The preview shows the working tree file when it
+- Markdown files get a preview pane. sa renders it itself by default —
+  nothing to install, and it can follow the diff as you scroll — and **mo**
+  renders it instead when you pick mo in the preview header. The choice is
+  remembered. The preview shows the working tree file when it
   exists; otherwise sa rebuilds the new side from the diff, which is
   complete for new files and partial for modified ones (a unified diff only
   carries the changed hunks).
@@ -116,7 +121,7 @@ $ sa comments -t default   # the flag still wins
   rather than by line — the two documents do not agree on lines, and
   pretending they do lands you in the wrong place with more confidence.
   Scrolling the preview yourself turns it off where you are, and the switch
-  turns it back on. It works with the simple preview only: mo is framed from
+  turns it back on. It works with sa's own preview only: mo is framed from
   another origin, where a page may not touch its scrolling.
 - Press `?` for the keyboard shortcuts: `j`/`k` move between files, `n`/`p`
   between comments, `f` folds, `v` switches split and unified, `s` toggles
