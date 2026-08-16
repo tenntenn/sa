@@ -104,6 +104,10 @@ $ sa comments -t default   # the flag still wins
   when it exists; otherwise sa rebuilds the new side from the diff, which is
   complete for new files and partial for modified ones (a unified diff only
   carries the changed hunks).
+- The header switch cycles **Auto / Light / Dark**: Auto follows the system
+  (or whatever host an exported page is read in), and a choice is remembered
+  per browser. The Markdown preview keeps mo's own theme — mo has its own
+  switch, in the toolbar inside the preview.
 - On a phone the page shows one pane at a time behind a **Files / Diff /
   Preview** tab bar, and the diff drops to unified. The preview is rendered by
   the page itself there — mo keeps its own sidebar inside the frame, which

@@ -8,6 +8,7 @@ import { PreviewPane } from './components/PreviewPane'
 import { Sidebar } from './components/Sidebar'
 import { clampRatio, SplitPane, SPLIT_DEFAULT } from './components/SplitPane'
 import { useNarrowLayout } from './useMediaQuery'
+import { applyTheme, nextTheme, storedTheme, themeLabel, type Theme } from './theme'
 
 interface Selected {
   diffId: string
@@ -59,7 +60,12 @@ export function App() {
   const [closing, setClosing] = useState(false)
   const [reviewNote, setReviewNote] = useState<string | null>(null)
   const [sidebarWidth, setSidebarWidth] = useState(storedSidebarWidth)
+  const [theme, setTheme] = useState<Theme>(storedTheme)
   const bodyRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    applyTheme(theme)
+  }, [theme])
 
   useEffect(() => {
     window.localStorage.setItem(SIDEBAR_KEY, String(sidebarWidth))
@@ -291,6 +297,13 @@ export function App() {
             {reviewed ? 'Reviewed' : 'Submit review'}
           </button>
         )}
+        <button
+          className="ghost"
+          onClick={() => setTheme(nextTheme(theme))}
+          title="Colours: follow the system, or pick one"
+        >
+          {themeLabel(theme)}
+        </button>
         {!client.isStatic && diffs.length > 0 && (
           <button
             className="ghost danger"
