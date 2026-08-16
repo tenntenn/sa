@@ -400,3 +400,34 @@ const goDiff = `diff --git a/main.go b/main.go
 -var x = 1
 +var x = 2
 `
+
+func TestFileContentServesMarkdown(t *testing.T) {
+	ts, _ := newTestServer(t)
+	var added AddDiffResponse
+	postJSON(t, ts.URL+"/_/api/groups/default/diffs", AddDiffRequest{Content: sampleDiff}, &added)
+	file := added.Diff.Files[1] // docs/new.md, a new file not on disk
+
+	var got FileContentResponse
+	resp := getJSON(t, ts.URL+"/_/api/groups/default/diffs/"+added.Diff.ID+"/files/"+file.ID+"/content", &got)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %s", resp.Status)
+	}
+	if got.Content != "# New\nbody\n" || got.Source != SourceReconstructed || !got.Complete {
+		t.Errorf("content = %+v", got)
+	}
+	// The Markdown is served without mo being involved at all.
+	if !strings.Contains(got.Content, "# New") {
+		t.Errorf("content = %q", got.Content)
+	}
+}
+
+func TestFileContentNeedsMarkdown(t *testing.T) {
+	ts, _ := newTestServer(t)
+	var added AddDiffResponse
+	postJSON(t, ts.URL+"/_/api/groups/default/diffs", AddDiffRequest{Content: goDiff}, &added)
+	file := added.Diff.Files[0]
+	resp := getJSON(t, ts.URL+"/_/api/groups/default/diffs/"+added.Diff.ID+"/files/"+file.ID+"/content", nil)
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %s, want 400 for a non Markdown file", resp.Status)
+	}
+}

@@ -149,6 +149,7 @@ func (s *Server) handler() http.Handler {
 	mux.HandleFunc("POST /_/api/groups/{group}/diffs", s.handleAddDiff)
 	mux.HandleFunc("DELETE /_/api/groups/{group}/diffs/{diff}", s.handleDeleteDiff)
 	mux.HandleFunc("GET /_/api/groups/{group}/diffs/{diff}/files/{file}/preview", s.handlePreview)
+	mux.HandleFunc("GET /_/api/groups/{group}/diffs/{diff}/files/{file}/content", s.handleFileContent)
 	mux.HandleFunc("GET /_/api/groups/{group}/comments", s.handleComments)
 	mux.HandleFunc("POST /_/api/groups/{group}/comments", s.handleAddComment)
 	mux.HandleFunc("PATCH /_/api/groups/{group}/comments/{id}", s.handleUpdateComment)
@@ -334,6 +335,30 @@ func (s *Server) handlePreview(w http.ResponseWriter, r *http.Request) {
 		if errors.Is(err, mo.ErrNotInstalled) {
 			status = http.StatusFailedDependency
 		} else if errors.Is(err, errNotPreviewable) {
+			status = http.StatusBadRequest
+		}
+		writeJSON(w, status, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, res)
+}
+
+// handleFileContent hands out the Markdown of a file so that a client too
+// narrow for mo's own layout can render it itself.
+func (s *Server) handleFileContent(w http.ResponseWriter, r *http.Request) {
+	name, ok := s.groupParam(w, r)
+	if !ok {
+		return
+	}
+	d, f, found := s.store.FileContext(name, r.PathValue("diff"), r.PathValue("file"))
+	if !found {
+		http.Error(w, "no such file", http.StatusNotFound)
+		return
+	}
+	res, err := s.prev.content(d, f)
+	if err != nil {
+		status := http.StatusInternalServerError
+		if errors.Is(err, errNotPreviewable) {
 			status = http.StatusBadRequest
 		}
 		writeJSON(w, status, map[string]string{"error": err.Error()})

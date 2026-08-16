@@ -8,6 +8,8 @@ interface Props {
   diffId: string | null
   file: FileDiff | null
   status: Status | null
+  /** narrow is set on a phone, where mo's own layout has no room. */
+  narrow?: boolean
 }
 
 /**
@@ -17,14 +19,20 @@ interface Props {
  * "frame-ancestors 'none'", so sa serves it through its own loopback proxy,
  * which relaxes that one directive for sa's origin. An exported page has no
  * mo behind it and renders the frozen Markdown itself.
+ *
+ * A phone does the same: mo keeps its own sidebar inside the frame, which
+ * would leave a column too narrow to read, so the Markdown is rendered here
+ * and mo is one tap away in its own window.
  */
-export function PreviewPane({ group, diffId, file, status }: Props) {
+export function PreviewPane({ group, diffId, file, status, narrow = false }: Props) {
   const [preview, setPreview] = useState<PreviewResult | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [reloadKey, setReloadKey] = useState(0)
+  const [openingMo, setOpeningMo] = useState(false)
 
   const previewable = file !== null && file.isMarkdown && diffId !== null
+  const renderHere = narrow || client.isStatic
 
   useEffect(() => {
     if (!previewable || !file || !diffId) {
@@ -35,8 +43,10 @@ export function PreviewPane({ group, diffId, file, status }: Props) {
     let cancelled = false
     setLoading(true)
     setError(null)
-    client
-      .preview(group, diffId, file.id)
+    const load = renderHere
+      ? client.previewMarkdown(group, diffId, file.id)
+      : client.preview(group, diffId, file.id)
+    load
       .then((p) => {
         if (!cancelled) setPreview(p)
       })
@@ -52,7 +62,25 @@ export function PreviewPane({ group, diffId, file, status }: Props) {
     return () => {
       cancelled = true
     }
-  }, [group, diffId, file, previewable, reloadKey])
+  }, [group, diffId, file, previewable, renderHere, reloadKey])
+
+  // mo is not embedded on a phone, but it is still the full preview: ask the
+  // server for it only when someone actually wants it.
+  const openInMo = async () => {
+    if (!previewable || !file || !diffId) return
+    setOpeningMo(true)
+    setError(null)
+    try {
+      const result = await client.preview(group, diffId, file.id)
+      if (result.kind === 'frame' && result.moUrl) {
+        window.open(result.moUrl, '_blank', 'noreferrer')
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setOpeningMo(false)
+    }
+  }
 
   if (!file) {
     return (
@@ -93,12 +121,17 @@ export function PreviewPane({ group, diffId, file, status }: Props) {
             Open in mo
           </a>
         )}
+        {!client.isStatic && renderHere && (
+          <button className="ghost" onClick={() => void openInMo()} disabled={!previewable || openingMo}>
+            {openingMo ? 'Opening…' : 'Open in mo'}
+          </button>
+        )}
       </div>
 
       {!file.isMarkdown ? (
         <p className="empty">{filePath(file)} is not Markdown, so there is nothing to preview.</p>
       ) : loading ? (
-        <p className="empty">{client.isStatic ? 'Rendering…' : 'Asking mo for a preview…'}</p>
+        <p className="empty">{renderHere ? 'Rendering…' : 'Asking mo for a preview…'}</p>
       ) : error ? (
         <div className="preview-error">
           <p className="error">{error}</p>

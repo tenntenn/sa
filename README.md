@@ -75,6 +75,11 @@ $ sa --shutdown        # stop the server
   when it exists; otherwise sa rebuilds the new side from the diff, which is
   complete for new files and partial for modified ones (a unified diff only
   carries the changed hunks).
+- On a phone the page shows one pane at a time behind a **Files / Diff /
+  Preview** tab bar, and the diff drops to unified. The preview is rendered by
+  the page itself there — mo keeps its own sidebar inside the frame, which
+  would leave a column too narrow to read — and **Open in mo** opens the real
+  mo page in its own tab.
 
 ### Reading the comments back
 
@@ -169,6 +174,11 @@ frame it directly; sa therefore publishes mo through a loopback-only reverse
 proxy that rewrites that one directive to allow sa's own origin, and forwards
 everything else — the rest of mo's CSP included — unchanged. "Open in mo"
 always links to mo itself.
+
+Two places render Markdown without mo, because mo cannot be there: an
+exported page (no server behind it) and a phone (no room for mo's own layout
+inside the frame). Both ask sa for the Markdown and render it in the page,
+and both keep a link to mo for the full thing.
 
 Note that mo cannot be used as a Go library today: everything but its cobra
 entry point lives under `internal/`, and the published module does not build

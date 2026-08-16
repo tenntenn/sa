@@ -45,6 +45,51 @@ type PreviewResponse struct {
 	Complete bool `json:"complete"`
 }
 
+// FileContentResponse is the payload of the file content endpoint: the new
+// side of a file, for a client that renders Markdown itself.
+type FileContentResponse struct {
+	Path     string        `json:"path"`
+	Source   PreviewSource `json:"source"`
+	Complete bool          `json:"complete"`
+	Content  string        `json:"content"`
+}
+
+// content returns the Markdown of a file without involving mo. A phone has
+// no room for mo's own chrome inside the preview pane, so the browser
+// renders the Markdown itself there and keeps mo for its own window.
+func (p *previewer) content(d *model.Diff, f *model.File) (*FileContentResponse, error) {
+	if err := previewable(f); err != nil {
+		return nil, err
+	}
+	got := source.NewSide(d.BaseDir, f)
+	if strings.TrimSpace(got.Content) == "" {
+		return nil, fmt.Errorf("%w: nothing to preview for %s", errNotPreviewable, f.Path())
+	}
+	kind := SourceReconstructed
+	if got.Kind == source.FromWorktree {
+		kind = SourceWorktree
+	}
+	return &FileContentResponse{
+		Path:     got.Path,
+		Source:   kind,
+		Complete: got.Complete,
+		Content:  got.Content,
+	}, nil
+}
+
+// previewable rejects the files there is no Markdown preview for.
+func previewable(f *model.File) error {
+	switch {
+	case !f.IsMarkdown:
+		return fmt.Errorf("%w: %s is not Markdown", errNotPreviewable, f.Path())
+	case f.IsBinary:
+		return fmt.Errorf("%w: %s is binary", errNotPreviewable, f.Path())
+	case f.Status == model.StatusDeleted:
+		return fmt.Errorf("%w: %s was deleted", errNotPreviewable, f.Path())
+	}
+	return nil
+}
+
 // previewer turns a file of a diff into a mo preview.
 type previewer struct {
 	mo       *mo.Runner
@@ -55,14 +100,8 @@ type previewer struct {
 // preview hands the Markdown of f to mo and returns the URLs of the
 // resulting page.
 func (p *previewer) preview(ctx context.Context, group string, d *model.Diff, f *model.File) (*PreviewResponse, error) {
-	if !f.IsMarkdown {
-		return nil, fmt.Errorf("%w: %s is not Markdown", errNotPreviewable, f.Path())
-	}
-	if f.IsBinary {
-		return nil, fmt.Errorf("%w: %s is binary", errNotPreviewable, f.Path())
-	}
-	if f.Status == model.StatusDeleted {
-		return nil, fmt.Errorf("%w: %s was deleted", errNotPreviewable, f.Path())
+	if err := previewable(f); err != nil {
+		return nil, err
 	}
 
 	path, source, complete, err := p.resolve(group, d, f)

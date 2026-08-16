@@ -42,7 +42,11 @@ export interface SaClient {
   deleteComment(group: string, id: string): Promise<void>
   deleteDiff(group: string, diffId: string): Promise<void>
   prompt(group: string): Promise<string>
+  /** preview returns the mo page for a file, embedded or linked. */
   preview(group: string, diffId: string, fileId: string): Promise<PreviewResult>
+  /** previewMarkdown renders the Markdown in this page instead, which is
+   * what a window too narrow for mo's own layout uses. */
+  previewMarkdown(group: string, diffId: string, fileId: string): Promise<PreviewResult>
   subscribe(group: string, onChange: () => void): () => void
 }
 
@@ -94,6 +98,16 @@ function createLiveClient(): SaClient {
         path: p.path,
         source: p.source,
         complete: p.complete,
+      }
+    },
+    async previewMarkdown(group, diffId, fileId) {
+      const file = await api.getFileContent(group, diffId, fileId)
+      return {
+        kind: 'html',
+        html: renderMarkdown(file.content),
+        path: file.path,
+        source: file.source,
+        complete: file.complete,
       }
     },
     subscribe: api.subscribe,
@@ -187,6 +201,10 @@ function createStaticClient(data: StaticPayload): SaClient {
         source: entry.source,
         complete: entry.complete,
       }
+    },
+    async previewMarkdown(group, diffId, fileId) {
+      // An exported page renders its own Markdown either way.
+      return this.preview(group, diffId, fileId)
     },
     subscribe(_group, onChange) {
       listeners.add(onChange)

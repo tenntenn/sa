@@ -183,6 +183,7 @@ export function App() {
       diffId={selectedDiff?.id ?? null}
       file={selectedFile}
       status={status}
+      narrow={narrow}
     />
   )
 

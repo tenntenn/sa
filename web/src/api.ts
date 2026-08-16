@@ -30,6 +30,24 @@ export function getPreview(group: string, diffId: string, fileId: string): Promi
   )
 }
 
+export interface FileContent {
+  path: string
+  source: 'worktree' | 'reconstructed'
+  complete: boolean
+  content: string
+}
+
+export function getFileContent(
+  group: string,
+  diffId: string,
+  fileId: string,
+): Promise<FileContent> {
+  return request<FileContent>(
+    `/_/api/groups/${encodeURIComponent(group)}/diffs/${encodeURIComponent(diffId)}` +
+      `/files/${encodeURIComponent(fileId)}/content`,
+  )
+}
+
 export interface NewComment {
   diffId: string
   fileId: string
