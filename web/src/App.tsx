@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { groupFromLocation } from './api'
 import { client } from './client'
 import type { Comment, Diff, FileDiff, Status } from './types'
 import { DiffView } from './components/DiffView'
+import { Divider } from './components/Divider'
 import { PreviewPane } from './components/PreviewPane'
 import { Sidebar } from './components/Sidebar'
 import { SplitPane } from './components/SplitPane'
@@ -10,6 +11,23 @@ import { SplitPane } from './components/SplitPane'
 interface Selected {
   diffId: string
   fileId: string
+}
+
+// The file list is a pane like the others: it can be dragged narrow, and
+// pulling it past the snapping point puts it away entirely.
+const SIDEBAR_DEFAULT = 280
+const SIDEBAR_MAX = 720
+const SIDEBAR_SNAP = 48
+const SIDEBAR_STEP = 24
+const SIDEBAR_KEY = 'sa.sidebar.width'
+
+function storedSidebarWidth(): number {
+  // An unset entry reads as null, which Number() would happily turn into a
+  // collapsed sidebar, so the absence is checked before the value.
+  const stored = window.localStorage.getItem(SIDEBAR_KEY)
+  if (stored === null) return SIDEBAR_DEFAULT
+  const width = Number(stored)
+  return Number.isFinite(width) && width >= 0 && width <= SIDEBAR_MAX ? width : SIDEBAR_DEFAULT
 }
 
 export function App() {
@@ -24,6 +42,21 @@ export function App() {
   const [showPreview, setShowPreview] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  const [sidebarWidth, setSidebarWidth] = useState(storedSidebarWidth)
+  const bodyRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    window.localStorage.setItem(SIDEBAR_KEY, String(sidebarWidth))
+  }, [sidebarWidth])
+
+  const resizeSidebar = useCallback((clientX: number) => {
+    const rect = bodyRef.current?.getBoundingClientRect()
+    if (!rect) return
+    const next = clientX - rect.left
+    setSidebarWidth(next < SIDEBAR_SNAP ? 0 : Math.min(SIDEBAR_MAX, next))
+  }, [])
+
+  const toggleSidebar = () => setSidebarWidth((w) => (w === 0 ? SIDEBAR_DEFAULT : 0))
 
   const reload = useCallback(async () => {
     try {
@@ -113,6 +146,10 @@ export function App() {
           {copied ? 'Copied' : 'Copy prompt'}
         </button>
         <label className="switch">
+          <input type="checkbox" checked={sidebarWidth > 0} onChange={toggleSidebar} />
+          Files
+        </label>
+        <label className="switch">
           <input
             type="checkbox"
             checked={showPreview}
@@ -124,8 +161,9 @@ export function App() {
 
       {error && <div className="error banner">{error}</div>}
 
-      <div className="body">
+      <div className="body" ref={bodyRef}>
         <Sidebar
+          width={sidebarWidth}
           group={group}
           diffs={diffs}
           comments={comments}
@@ -133,6 +171,14 @@ export function App() {
           selected={selected}
           onSelect={(diffId, fileId) => setSelected({ diffId, fileId })}
           onChanged={() => void reload()}
+        />
+        <Divider
+          label="Resize the file list"
+          onDrag={resizeSidebar}
+          onReset={toggleSidebar}
+          onNudge={(direction) =>
+            setSidebarWidth((w) => Math.min(SIDEBAR_MAX, Math.max(0, w + direction * SIDEBAR_STEP)))
+          }
         />
 
         <main className="content">

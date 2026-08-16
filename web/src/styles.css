@@ -130,12 +130,32 @@ body {
 }
 
 .sidebar {
-  width: 280px;
   flex: none;
-  border-right: 1px solid var(--border);
+  min-width: 0;
   overflow: auto;
   padding: 8px;
   background: var(--bg-soft);
+  container-type: inline-size;
+}
+
+/* A narrow file list spends what room it has on the file names. */
+@container (max-width: 230px) {
+  .file-item .stat {
+    display: none;
+  }
+}
+
+@container (max-width: 150px) {
+  .file-item .badge.sm {
+    display: none;
+  }
+}
+
+/* A pane dragged all the way in keeps no padding, so the divider sits flush
+   against the next pane and can be pulled back out. */
+.sidebar.collapsed {
+  padding: 0;
+  overflow: hidden;
 }
 
 .content {
@@ -150,11 +170,6 @@ body {
   min-width: 0;
 }
 
-.split.dragging {
-  cursor: col-resize;
-  user-select: none;
-}
-
 .split-pane {
   min-width: 0;
   overflow: auto;
@@ -162,18 +177,34 @@ body {
   flex-direction: column;
 }
 
-.split-divider {
+.pane-divider {
   flex: none;
   width: 6px;
   cursor: col-resize;
   background: var(--border);
   opacity: 0.5;
+  touch-action: none;
 }
 
-.split-divider:hover,
-.split-divider:focus {
+.pane-divider:hover,
+.pane-divider:focus-visible,
+.pane-divider.dragging {
   opacity: 1;
   outline: none;
+  background: var(--accent);
+}
+
+/* The pointer keeps its meaning while a divider is dragged, wherever it
+   travels over the window. */
+body.resizing {
+  cursor: col-resize;
+  user-select: none;
+}
+
+/* Belt and braces with the pointer capture: a framed preview must not eat
+   the pointer while a divider is being dragged over it. */
+body.resizing iframe {
+  pointer-events: none;
 }
 
 /* ---------- sidebar ---------- */
@@ -311,10 +342,14 @@ body {
   z-index: 1;
   display: flex;
   align-items: center;
+  flex-wrap: nowrap;
   gap: 8px;
   padding: 6px 10px;
   background: var(--bg-soft);
   border-bottom: 1px solid var(--border);
+  /* A pane squeezed to a sliver hides its tools rather than reflowing them
+     into a stack that pushes the content down. */
+  overflow: hidden;
 }
 
 .diff-title {
@@ -587,6 +622,7 @@ body {
 button,
 .button {
   font: inherit;
+  white-space: nowrap;
   font-size: 12px;
   padding: 3px 10px;
   border: 1px solid var(--border);

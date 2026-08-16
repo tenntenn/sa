@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { Divider } from './Divider'
 
 interface Props {
   left: ReactNode
@@ -8,41 +9,36 @@ interface Props {
   storageKey?: string
 }
 
-const MIN_RATIO = 0.2
-const MAX_RATIO = 0.8
+// Either pane can be squeezed down to a sliver, so that a wide diff or a wide
+// preview can take almost the whole window without being switched off.
+const MIN_RATIO = 0.04
+const MAX_RATIO = 0.96
+const DEFAULT_RATIO = 0.55
+const KEY_STEP = 0.02
 
-/** SplitPane shows the diff and the preview side by side with a draggable divider. */
+/** SplitPane shows the diff and the preview side by side, with a draggable divider. */
 export function SplitPane({ left, right, showRight, storageKey = 'sa.split' }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [ratio, setRatio] = useState<number>(() => {
-    const stored = Number(window.localStorage.getItem(storageKey))
-    return stored >= MIN_RATIO && stored <= MAX_RATIO ? stored : 0.55
+    const stored = window.localStorage.getItem(storageKey)
+    if (stored === null) return DEFAULT_RATIO
+    const value = Number(stored)
+    return value >= MIN_RATIO && value <= MAX_RATIO ? value : DEFAULT_RATIO
   })
-  const [dragging, setDragging] = useState(false)
 
   useEffect(() => {
     window.localStorage.setItem(storageKey, String(ratio))
   }, [ratio, storageKey])
 
-  const onPointerMove = useCallback((ev: PointerEvent) => {
+  const clamp = (value: number) => Math.min(MAX_RATIO, Math.max(MIN_RATIO, value))
+
+  const onDrag = useCallback((clientX: number) => {
     const container = containerRef.current
     if (!container) return
     const rect = container.getBoundingClientRect()
     if (rect.width === 0) return
-    const next = (ev.clientX - rect.left) / rect.width
-    setRatio(Math.min(MAX_RATIO, Math.max(MIN_RATIO, next)))
+    setRatio(clamp((clientX - rect.left) / rect.width))
   }, [])
-
-  useEffect(() => {
-    if (!dragging) return
-    const stop = () => setDragging(false)
-    window.addEventListener('pointermove', onPointerMove)
-    window.addEventListener('pointerup', stop)
-    return () => {
-      window.removeEventListener('pointermove', onPointerMove)
-      window.removeEventListener('pointerup', stop)
-    }
-  }, [dragging, onPointerMove])
 
   if (!showRight) {
     return (
@@ -55,24 +51,15 @@ export function SplitPane({ left, right, showRight, storageKey = 'sa.split' }: P
   }
 
   return (
-    <div className={`split${dragging ? ' dragging' : ''}`} ref={containerRef}>
+    <div className="split" ref={containerRef}>
       <div className="split-pane" style={{ width: `${ratio * 100}%` }}>
         {left}
       </div>
-      <div
-        className="split-divider"
-        role="separator"
-        aria-orientation="vertical"
-        aria-label="Resize the preview"
-        tabIndex={0}
-        onPointerDown={(ev) => {
-          ev.preventDefault()
-          setDragging(true)
-        }}
-        onKeyDown={(ev) => {
-          if (ev.key === 'ArrowLeft') setRatio((r) => Math.max(MIN_RATIO, r - 0.02))
-          if (ev.key === 'ArrowRight') setRatio((r) => Math.min(MAX_RATIO, r + 0.02))
-        }}
+      <Divider
+        label="Resize the preview"
+        onDrag={onDrag}
+        onReset={() => setRatio(DEFAULT_RATIO)}
+        onNudge={(direction) => setRatio((r) => clamp(r + direction * KEY_STEP))}
       />
       <div className="split-pane" style={{ width: `${(1 - ratio) * 100}%` }}>
         {right}

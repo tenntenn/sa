@@ -3,6 +3,8 @@ import { filePath } from '../types'
 import { client } from '../client'
 
 interface Props {
+  /** width in pixels; 0 collapses the file list out of the way. */
+  width: number
   group: string
   diffs: Diff[]
   comments: Comment[]
@@ -12,12 +14,25 @@ interface Props {
   onChanged: () => void
 }
 
-export function Sidebar({ group, diffs, comments, status, selected, onSelect, onChanged }: Props) {
+export function Sidebar({
+  width,
+  group,
+  diffs,
+  comments,
+  status,
+  selected,
+  onSelect,
+  onChanged,
+}: Props) {
   const commentCount = (diffId: string, fileId: string) =>
     comments.filter((c) => c.diffId === diffId && c.fileId === fileId && !c.resolved).length
 
   return (
-    <aside className="sidebar">
+    <aside
+      className={`sidebar${width === 0 ? ' collapsed' : ''}`}
+      style={{ width }}
+      aria-hidden={width === 0}
+    >
       {diffs.length === 0 && <p className="empty">No diff yet.</p>}
 
       {diffs.map((diff) => (
