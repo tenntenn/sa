@@ -68,6 +68,8 @@ export interface Comment {
   updatedAt: string
 }
 
+export type Verdict = 'approved' | 'commented' | 'changes-requested'
+
 export interface Group {
   name: string
   diffs: Diff[] | null
@@ -75,6 +77,9 @@ export interface Group {
   /** reviewedAt is when the review was last submitted. */
   reviewedAt?: string
   reviewNote?: string
+  /** reviewVerdict is what the reviewer decided about the change as a
+   * whole: approved, commented or changes-requested. */
+  reviewVerdict?: Verdict
 }
 
 export interface GroupSummary {

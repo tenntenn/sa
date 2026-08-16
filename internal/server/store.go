@@ -301,7 +301,7 @@ func (s *Store) FileContext(group, diffID, fileID string) (*model.Diff, *model.F
 
 // SubmitReview records that the human is done looking, which is the event
 // an agent waits for.
-func (s *Store) SubmitReview(group, note string) (*model.Group, bool) {
+func (s *Store) SubmitReview(group, note string, verdict model.Verdict) (*model.Group, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	g := s.group(group, false)
@@ -310,6 +310,7 @@ func (s *Store) SubmitReview(group, note string) (*model.Group, bool) {
 	}
 	g.ReviewedAt = time.Now()
 	g.ReviewNote = note
+	g.ReviewVerdict = verdict
 	s.persist()
 	return clone(g), true
 }

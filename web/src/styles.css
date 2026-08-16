@@ -1009,3 +1009,19 @@ a {
   color: var(--fg-muted);
   font-size: 12px;
 }
+
+/* The three verdicts read as three different acts, so they do not look
+   like one button repeated. */
+.comment-actions .verdict.approve {
+  background: var(--ok-bg, #1a7f37);
+  border-color: var(--ok-bg, #1a7f37);
+  color: #fff;
+}
+.comment-actions .verdict.changes {
+  background: transparent;
+  border-color: var(--danger, #cf222e);
+  color: var(--danger, #cf222e);
+}
+.comment-actions .verdict:disabled {
+  opacity: 0.6;
+}

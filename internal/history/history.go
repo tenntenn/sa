@@ -33,6 +33,9 @@ type Record struct {
 	Additions   int       `json:"additions"`
 	Deletions   int       `json:"deletions"`
 	Note        string    `json:"note,omitempty"`
+	// Verdict is what the reviewer decided about the change as a whole:
+	// approved, commented or changes-requested.
+	Verdict model.Verdict `json:"verdict,omitempty"`
 	// Labels are what the diffs of this round were sent with. A later diff
 	// wins over an earlier one for the same key.
 	Labels   map[string]string `json:"labels,omitempty"`
@@ -67,6 +70,7 @@ func FromGroup(g *model.Group) Record {
 		Group:      g.Name,
 		ReviewedAt: g.ReviewedAt,
 		Note:       g.ReviewNote,
+		Verdict:    g.ReviewVerdict,
 		Diffs:      len(g.Diffs),
 		Comments:   make([]Comment, 0, len(g.Comments)),
 	}

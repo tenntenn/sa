@@ -1,5 +1,5 @@
 import * as api from './api'
-import type { Comment, Diff, Status } from './types'
+import type { Comment, Diff, Status, Verdict } from './types'
 import { renderMarkdown } from './markdown'
 import { buildPrompt } from './prompt'
 import { suggestions } from './suggestion'
@@ -29,6 +29,8 @@ export interface GroupData {
   status: Status | null
   /** reviewedAt is when the review was last submitted, if it was. */
   reviewedAt?: string
+  /** reviewVerdict is what that review decided. */
+  reviewVerdict?: Verdict
 }
 
 /**
@@ -50,7 +52,7 @@ export interface SaClient {
   prompt(group: string): Promise<string>
   /** submitReview tells everyone waiting that the review is done. It only
    * exists where there is a server to tell. */
-  submitReview(group: string, note: string): Promise<void>
+  submitReview(group: string, note: string, verdict: Verdict): Promise<void>
   /** preview returns the mo page for a file, embedded or linked. */
   preview(group: string, diffId: string, fileId: string): Promise<PreviewResult>
   /** previewMarkdown renders the Markdown in this page instead, which is
@@ -85,6 +87,7 @@ function createLiveClient(): SaClient {
         diffs: g.diffs ?? [],
         comments: g.comments ?? [],
         reviewedAt: g.reviewedAt,
+        reviewVerdict: g.reviewVerdict,
         status,
       }
     },
@@ -106,8 +109,8 @@ function createLiveClient(): SaClient {
     prompt(group) {
       return api.getPrompt(group)
     },
-    async submitReview(group, note) {
-      await api.submitReview(group, note)
+    async submitReview(group, note, verdict) {
+      await api.submitReview(group, note, verdict)
     },
     async preview(group, diffId, fileId) {
       const p = await api.getPreview(group, diffId, fileId)

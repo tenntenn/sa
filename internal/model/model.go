@@ -258,9 +258,68 @@ type Group struct {
 	ReviewedAt time.Time `json:"reviewedAt,omitzero"`
 	// ReviewNote is what the reviewer wrote when submitting, if anything.
 	ReviewNote string `json:"reviewNote,omitempty"`
+	// ReviewVerdict is what the reviewer decided about the change as a
+	// whole, separately from what any single comment says.
+	ReviewVerdict Verdict `json:"reviewVerdict,omitempty"`
 	// Hooks are run when a review is submitted, so that work can carry on
 	// even though whoever sent the diff is long gone.
 	Hooks []*Hook `json:"hooks,omitempty"`
+}
+
+// Verdict is what a reviewer decided about the change as a whole.
+//
+// Counting comments does not answer it. A review can approve a change and
+// still say three things about it, and a review can ask for changes without
+// pointing at any single line. So the reviewer says which of the three it
+// was, and everything downstream - the exit status, the prompt an agent
+// reads, the log - repeats their answer instead of guessing at one.
+type Verdict string
+
+const (
+	// VerdictApproved means the change can go ahead. Comments left with it
+	// are worth reading, not blocking.
+	VerdictApproved Verdict = "approved"
+	// VerdictCommented means the reviewer had things to say and did not
+	// decide either way. It is the default, and the honest answer when a
+	// reviewer is not the one who gets to approve.
+	VerdictCommented Verdict = "commented"
+	// VerdictChangesRequested means the change should not go ahead as it
+	// is.
+	VerdictChangesRequested Verdict = "changes-requested"
+)
+
+// ParseVerdict reads a verdict, accepting the spellings people actually
+// type. An empty string is "commented".
+func ParseVerdict(s string) (Verdict, bool) {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "":
+		return VerdictCommented, true
+	case "approved", "approve", "lgtm":
+		return VerdictApproved, true
+	case "commented", "comment":
+		return VerdictCommented, true
+	case "changes-requested", "changes_requested", "request-changes", "changes":
+		return VerdictChangesRequested, true
+	}
+	return "", false
+}
+
+// Blocking reports whether the verdict says the change should not go ahead
+// yet. It is what an exit status and a waiting agent act on.
+func (v Verdict) Blocking() bool {
+	return v == VerdictChangesRequested
+}
+
+// String makes a verdict readable in a sentence.
+func (v Verdict) String() string {
+	switch v {
+	case VerdictApproved:
+		return "approved"
+	case VerdictChangesRequested:
+		return "changes requested"
+	default:
+		return "commented"
+	}
 }
 
 // Hook is what sa does when a review is submitted.

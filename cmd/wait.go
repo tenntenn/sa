@@ -109,14 +109,19 @@ func runWait(cmd *cobra.Command, _ []string) error {
 	return printReview(ctx, c, group)
 }
 
+// exitReview ends with the status the reviewer's verdict calls for.
+func exitReview(ctx context.Context, c *client.Client, group string) error {
+	g, err := c.Group(ctx, group)
+	if err != nil {
+		return err
+	}
+	return exitWithVerdict(g.ReviewVerdict, g.Comments)
+}
+
 // printReview writes the review the same way `sa comments` does.
 func printReview(ctx context.Context, c *client.Client, group string) error {
 	if waitQuiet {
-		comments, err := c.Comments(ctx, group)
-		if err != nil {
-			return err
-		}
-		return exitWithComments(comments)
+		return exitReview(ctx, c, group)
 	}
 	format := waitFormat
 	if waitJSON {
@@ -138,7 +143,7 @@ func printReview(ctx context.Context, c *client.Client, group string) error {
 			return err
 		}
 		if waitExitCode {
-			return exitWithComments(comments)
+			return exitReview(ctx, c, group)
 		}
 		return nil
 	case "prompt", "markdown":
@@ -148,11 +153,7 @@ func printReview(ctx context.Context, c *client.Client, group string) error {
 		}
 		fmt.Print(text)
 		if waitExitCode {
-			comments, err := c.Comments(ctx, group)
-			if err != nil {
-				return err
-			}
-			return exitWithComments(comments)
+			return exitReview(ctx, c, group)
 		}
 		return nil
 	default:

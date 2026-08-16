@@ -221,9 +221,9 @@ func (c *Client) do(ctx context.Context, method, u string, body, out any) error 
 
 // SubmitReview marks the review of a group as done, which is what wakes
 // anything waiting on it.
-func (c *Client) SubmitReview(ctx context.Context, group, note string) (*model.Group, error) {
+func (c *Client) SubmitReview(ctx context.Context, group, note string, verdict model.Verdict) (*model.Group, error) {
 	var g model.Group
-	body := server.SubmitReviewRequest{Note: note}
+	body := server.SubmitReviewRequest{Note: note, Verdict: string(verdict)}
 	if err := c.do(ctx, http.MethodPost, c.url("/_/api/groups/%s/review", url.PathEscape(group)), body, &g); err != nil {
 		return nil, err
 	}

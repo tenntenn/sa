@@ -198,15 +198,32 @@ yourself, since there is no browser and no button:
 
 ```
 sa comment <path>:<line> -m "<what is wrong and why>" --author <you> --target <topic>
-sa submit --target <topic> --note "<what the review says as a whole>"
+sa submit --target <topic> --approve -m "<what the review says as a whole>"
 ```
 
 `sa submit` is the Submit button: it wakes whoever ran `sa wait`, starts the
 hooks, and writes the round into the log of past reviews. Submit even when
 you found nothing — "nothing to address" is the answer the other side is
 waiting for, and a round that is never submitted is one nobody is told
-about. `--exit-code` reports what you submitted: 1 when something needs
-addressing, 0 when nothing does.
+about.
+
+Say what you decided about the change as a whole, the way a review on a
+pull request does. It is a separate question from what any one comment
+says, and the reader acts on it:
+
+```
+sa submit --approve                     # it can go ahead
+sa submit                               # commented: said things, did not decide
+sa submit --request-changes -m "..."    # not as it is
+```
+
+Approve when the change is right and your remarks are worth reading rather
+than blocking — that is what an approval with comments means, and refusing
+to give one because you found something to say is how a review stops being
+useful. Ask for changes when it should not go ahead as it is, even if you
+pointed at no single line. Leave it at "commented" when the decision is not
+yours to make. `--exit-code` turns your answer into a status: 1 when the
+review blocks the change, 0 when it does not.
 
 Two things make such a review checkable afterwards, so do both: anchor every
 comment to the exact `path:line` it is about, and always pass `--author` with

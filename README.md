@@ -146,9 +146,19 @@ EOF
 
 **Submit review** in the header says "I am done looking". That is the moment
 sa tells everything that is waiting — an agent, a script, another machine —
-that the comments are worth reading. An optional note goes with it and shows
-up at the top of the prompt. Sending another diff starts the next round, and
-the group counts as unreviewed again.
+that the comments are worth reading. It asks for one thing more: what you
+decided about the change as a whole, as **Approve**, **Comment** or
+**Request changes**, the same three a pull request review has. An optional
+note goes with it and shows up at the top of the prompt. Sending another
+diff starts the next round, and the group counts as unreviewed again.
+
+The verdict is a separate question from what any one comment says, which is
+why sa asks instead of counting: approving with three remarks on the change
+is a normal thing to do, and so is sending a change back without pointing at
+a single line. Whoever reads the review is told which it was, in those
+words — `sa comments` opens with "The reviewer approved the change; anything
+below is worth reading but does not block it", or with "asked for changes;
+the change should not go ahead as it is".
 
 ### Waiting, and being woken up
 
@@ -190,6 +200,16 @@ $ sa comments -t api             # comments of the "api" group
 $ sa comments --clear            # start the next review round
 ```
 
+### Approve, comment, or request changes
+
+A review says two different things: what is wrong with particular lines, and
+what the reviewer decided about the change as a whole. Counting comments
+does not answer the second — a change can be approved with three remarks on
+it, and can be sent back without a single line being pointed at — so sa asks
+for it. The browser offers the three buttons; `sa submit` takes the same
+three, and the verdict is what `--exit-code`, the prompt an agent reads, and
+the log all repeat.
+
 ### Reviewing without a browser
 
 The reviewer does not have to be a person. Comments go in from the command
@@ -200,8 +220,9 @@ starts the hooks, and writes the round into the log:
 $ sa comment internal/server/server.go:166 --author code-review \
     -m "any site can POST here, and a hook is a shell command sa runs"
 $ sa comment --json --author code-review < findings.json   # many at once
-$ sa submit --note "one thing to fix"
-$ sa submit -q && echo "nothing to address"                # 0 clean, 1 not
+$ sa submit --approve -m "fine by me"                      # it can go ahead
+$ sa submit --request-changes -m "not like this"           # it should not
+$ sa submit -q && echo "nothing blocking"                  # 0 clear, 1 not
 ```
 
 Two things make such a review checkable rather than merely confident: each

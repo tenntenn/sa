@@ -1,4 +1,4 @@
-import type { Comment, Group, Preview, Status } from './types'
+import type { Comment, Group, Preview, Status, Verdict } from './types'
 
 /** groupFromLocation reads the group name out of the URL path. */
 export function groupFromLocation(): string {
@@ -102,11 +102,11 @@ export async function deleteDiff(group: string, diffId: string): Promise<void> {
   if (!resp.ok) throw new Error((await resp.text()).trim() || resp.statusText)
 }
 
-export function submitReview(group: string, note: string): Promise<Group> {
+export function submitReview(group: string, note: string, verdict: Verdict): Promise<Group> {
   return request<Group>(`/_/api/groups/${encodeURIComponent(group)}/review`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ note }),
+    body: JSON.stringify({ note, verdict }),
   })
 }
 

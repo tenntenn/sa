@@ -29,6 +29,11 @@ func Prompt(g *model.Group, opts PromptOptions) string {
 	}
 
 	fmt.Fprintf(&b, "# Review comments (sa group %q)\n\n", g.Name)
+	if g.ReviewedAt.IsZero() {
+		// Nothing was submitted; these are comments in progress.
+	} else {
+		fmt.Fprintf(&b, "The reviewer %s.\n\n", verdictSentence(g.ReviewVerdict))
+	}
 	if note := strings.TrimSpace(g.ReviewNote); note != "" {
 		fmt.Fprintf(&b, "The reviewer wrote:\n\n%s\n\n", note)
 	}
@@ -36,7 +41,11 @@ func Prompt(g *model.Group, opts PromptOptions) string {
 		b.WriteString("No open review comments.\n")
 		return b.String()
 	}
-	fmt.Fprintf(&b, "%d comment(s) to address.\n", len(comments))
+	if g.ReviewVerdict == model.VerdictApproved {
+		fmt.Fprintf(&b, "%d comment(s) came with the approval.\n", len(comments))
+	} else {
+		fmt.Fprintf(&b, "%d comment(s) to address.\n", len(comments))
+	}
 
 	titles := map[string]string{}
 	for _, d := range g.Diffs {
@@ -73,9 +82,14 @@ func Prompt(g *model.Group, opts PromptOptions) string {
 
 	if !opts.NoInstruction {
 		b.WriteString("\n---\n\n")
-		b.WriteString("Address every comment above. A suggestion block replaces the lines it " +
-			"names, verbatim. When a comment is not worth acting on, say why instead of " +
-			"changing the code.\n")
+		if g.ReviewVerdict == model.VerdictApproved {
+			b.WriteString("The change is approved, so none of this blocks it. Act on what is " +
+				"worth acting on, say what you are leaving and why, and carry on.\n")
+		} else {
+			b.WriteString("Address every comment above. A suggestion block replaces the lines it " +
+				"names, verbatim. When a comment is not worth acting on, say why instead of " +
+				"changing the code.\n")
+		}
 	}
 	return b.String()
 }
@@ -118,4 +132,17 @@ func fenceFor(content string) string {
 		return "```"
 	}
 	return strings.Repeat("`", longest+1)
+}
+
+// verdictSentence says what the reviewer decided, in words an agent can act
+// on without counting anything.
+func verdictSentence(v model.Verdict) string {
+	switch v {
+	case model.VerdictApproved:
+		return "approved the change; anything below is worth reading but does not block it"
+	case model.VerdictChangesRequested:
+		return "asked for changes; the change should not go ahead as it is"
+	default:
+		return "left comments without deciding either way"
+	}
 }

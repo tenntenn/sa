@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { groupFromLocation } from './api'
 import { client } from './client'
 import { readSetting, writeSetting } from './storage'
-import type { Comment, Diff, FileDiff, Status } from './types'
+import type { Comment, Diff, FileDiff, Status, Verdict } from './types'
 import { DiffView } from './components/DiffView'
 import { Divider } from './components/Divider'
 import { PreviewPane } from './components/PreviewPane'
@@ -51,6 +51,7 @@ export function App() {
   const [diffs, setDiffs] = useState<Diff[]>([])
   const [comments, setComments] = useState<Comment[]>([])
   const [reviewedAt, setReviewedAt] = useState<string | null>(null)
+  const [reviewVerdict, setReviewVerdict] = useState<Verdict | null>(null)
   const [status, setStatus] = useState<Status | null>(null)
   const [selected, setSelected] = useState<Selected | null>(null)
   const [splitRatio, setSplitRatio] = useState(storedSplitRatio)
@@ -96,6 +97,7 @@ export function App() {
       setDiffs(data.diffs)
       setComments(data.comments)
       setReviewedAt(data.reviewedAt ?? null)
+      setReviewVerdict(data.reviewVerdict ?? null)
       setStatus(data.status)
       setError(null)
     } catch (err) {
@@ -161,11 +163,11 @@ export function App() {
   const reviewed = summary ? summary.reviewed : reviewedAt !== null
   const hooks = summary?.hooks ?? 0
 
-  const submitReview = async () => {
+  const submitReview = async (verdict: Verdict) => {
     setSubmitting(true)
     setError(null)
     try {
-      await client.submitReview(group, reviewNote ?? '')
+      await client.submitReview(group, reviewNote ?? '', verdict)
       setReviewNote(null)
       await reload()
     } catch (err) {
@@ -299,7 +301,7 @@ export function App() {
                 : 'Tell whoever is waiting that the review is done'
             }
           >
-            {reviewed ? 'Reviewed' : 'Submit review'}
+            {reviewed ? verdictLabel(reviewVerdict) : 'Submit review'}
           </button>
         )}
         <button
@@ -391,12 +393,34 @@ export function App() {
             onChange={(ev) => setReviewNote(ev.target.value)}
             onKeyDown={(ev) => {
               if (ev.key === 'Escape') setReviewNote(null)
-              if (ev.key === 'Enter' && (ev.metaKey || ev.ctrlKey)) void submitReview()
+              if (ev.key === 'Enter' && (ev.metaKey || ev.ctrlKey)) void submitReview('commented')
             }}
           />
           <div className="comment-actions">
-            <button disabled={submitting} onClick={() => void submitReview()}>
-              {submitting ? 'Submitting…' : `Submit review (${openComments} open)`}
+            {/* What the reviewer decided is a separate thing from what any
+                comment says, so it is asked here rather than counted. */}
+            <button
+              className="verdict approve"
+              disabled={submitting}
+              onClick={() => void submitReview('approved')}
+              title="The change can go ahead; comments are worth reading, not blocking"
+            >
+              Approve
+            </button>
+            <button
+              disabled={submitting}
+              onClick={() => void submitReview('commented')}
+              title="Say things without deciding either way"
+            >
+              {submitting ? 'Submitting…' : `Comment (${openComments} open)`}
+            </button>
+            <button
+              className="verdict changes"
+              disabled={submitting}
+              onClick={() => void submitReview('changes-requested')}
+              title="The change should not go ahead as it is"
+            >
+              Request changes
             </button>
             <button className="ghost" disabled={submitting} onClick={() => setReviewNote(null)}>
               Cancel
@@ -461,4 +485,17 @@ export function App() {
 /** staticGroupName reads the group an exported page was written for. */
 function staticGroupName(): string {
   return window.__SA_DATA__?.group ?? 'default'
+}
+
+/** verdictLabel says what a finished review decided, on the button that
+ * used to say only "Reviewed". */
+function verdictLabel(verdict: Verdict | null): string {
+  switch (verdict) {
+    case 'approved':
+      return 'Approved'
+    case 'changes-requested':
+      return 'Changes requested'
+    default:
+      return 'Reviewed'
+  }
 }

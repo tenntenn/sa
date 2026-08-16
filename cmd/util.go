@@ -91,3 +91,17 @@ func exitWithComments(comments []*model.Comment) error {
 	}
 	return nil
 }
+
+// exitWithVerdict ends a --exit-code command that knows what the reviewer
+// decided, which outranks counting comments: an approval with three remarks
+// on it is still an approval, and a review that asked for changes blocks
+// even if it pointed at no line in particular.
+func exitWithVerdict(v model.Verdict, comments []*model.Comment) error {
+	switch v {
+	case model.VerdictApproved:
+		return nil
+	case model.VerdictChangesRequested:
+		os.Exit(ExitOpenComments)
+	}
+	return exitWithComments(comments)
+}

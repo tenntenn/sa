@@ -668,6 +668,9 @@ func (s *Server) handlePrompt(w http.ResponseWriter, r *http.Request) {
 // SubmitReviewRequest is the body of POST .../review.
 type SubmitReviewRequest struct {
 	Note string `json:"note"`
+	// Verdict is approved, commented or changes-requested; empty means
+	// commented, which is what a reviewer who did not choose is saying.
+	Verdict string `json:"verdict,omitempty"`
 }
 
 // handleSubmitReview records that the human is done. It is the moment the
@@ -684,7 +687,12 @@ func (s *Server) handleSubmitReview(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	g, found := s.store.SubmitReview(name, req.Note)
+	verdict, ok := model.ParseVerdict(req.Verdict)
+	if !ok {
+		http.Error(w, "verdict must be approved, commented or changes-requested", http.StatusBadRequest)
+		return
+	}
+	g, found := s.store.SubmitReview(name, req.Note, verdict)
 	if !found {
 		http.Error(w, "no such group", http.StatusNotFound)
 		return
@@ -790,6 +798,7 @@ func (s *Server) notifyReview(g *model.Group) {
 		"group":      g.Name,
 		"reviewedAt": g.ReviewedAt,
 		"comments":   len(openComments(g)),
+		"verdict":    g.ReviewVerdict,
 	})
 	if err != nil {
 		return
