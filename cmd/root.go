@@ -239,13 +239,16 @@ func run(cmd *cobra.Command, _ []string) error {
 }
 
 // shouldOpen decides whether to open the browser: like mo, sa opens it when
-// it just started the server, and otherwise only on request.
+// it just started the server, and otherwise only on request. In a pipeline
+// or a job there is nobody to open it for, so it stays shut unless asked.
 func shouldOpen(started bool) bool {
 	switch {
 	case noOpen:
 		return false
 	case openBrowser:
 		return true
+	case !isTerminal(os.Stdout) && !isTerminal(os.Stderr):
+		return false
 	default:
 		return started
 	}

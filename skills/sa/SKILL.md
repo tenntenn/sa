@@ -204,6 +204,39 @@ written on it stay in that browser. Use `--fragment` when the page is
 embedded into something that brings its own `<html>` (for example an
 artifact).
 
+## Fitting sa into what you were already doing
+
+sa is one command among the ones you already run, so let the shell do the
+joining rather than looking for a flag:
+
+```
+git diff | sa                          # anything that writes a diff feeds it
+sa comments | pbcopy                   # anything that reads text takes it
+sa reviews --format jsonl | jq ...     # a line per review, for whatever asks
+```
+
+`sa comments` and `sa wait` say what they found in their exit status too — 0
+when there is nothing to address, 1 when there is, and 2 from `sa wait` when
+the review has not happened yet — so a review can gate what comes next
+without anyone reading the output:
+
+```
+git diff | sa --target <topic>
+sa wait --target <topic> -q && git commit -m "<message>"
+```
+
+That is the recommended way round committing, and it is worth being plain
+with the user about why: send what you are about to commit, wait for the
+review, and commit only once it comes back with nothing to address. sa has
+no idea what a commit is and stays out of the way of one — it writes nothing
+into the working tree, so `git status` says exactly what it said before you
+started. When a review does have comments, address them and send the next
+round before committing rather than committing over them.
+
+If the change is already committed, review it the same way: `git show | sa`,
+or `git diff <base>..HEAD | sa`. Use `--title` to say which is which, since
+sa only sees the text.
+
 ## Learning from past reviews
 
 Every submitted review is kept, which makes the reviewer's habits readable

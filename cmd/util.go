@@ -7,6 +7,7 @@ import (
 
 	"github.com/pkg/browser"
 
+	"github.com/tenntenn/sa/internal/model"
 	"github.com/tenntenn/sa/internal/server"
 )
 
@@ -33,4 +34,30 @@ func jsonEncoder(w io.Writer) *json.Encoder {
 
 func browserOpen(url string) error {
 	return browser.OpenURL(url)
+}
+
+// isTerminal reports whether a stream is attached to a terminal. sa is meant
+// to sit in a pipeline as much as in a shell, and a pipeline has nobody to
+// open a browser for.
+func isTerminal(f *os.File) bool {
+	fi, err := f.Stat()
+	if err != nil {
+		return false
+	}
+	return fi.Mode()&os.ModeCharDevice != 0
+}
+
+// ExitOpenComments is the status of a command that found comments to
+// address, in the tradition of grep and diff: nothing to say is 0, something
+// to say is 1, and a real failure is above that.
+const ExitOpenComments = 1
+
+// exitWithComments ends a --exit-code command.
+func exitWithComments(comments []*model.Comment) error {
+	for _, c := range comments {
+		if !c.Resolved {
+			os.Exit(ExitOpenComments)
+		}
+	}
+	return nil
 }

@@ -14,9 +14,11 @@ import (
 )
 
 var (
-	waitTimeout time.Duration
-	waitFormat  string
-	waitJSON    bool
+	waitTimeout  time.Duration
+	waitFormat   string
+	waitJSON     bool
+	waitExitCode bool
+	waitQuiet    bool
 )
 
 var waitCmd = &cobra.Command{
@@ -41,7 +43,11 @@ what to do instead and let the server start it:
   $ git diff | sa --on-review 'claude -p "$(sa comments)"'
 
 --timeout gives up after a while and exits with status 2, which tells a
-caller "not reviewed yet" as opposed to "something went wrong".`,
+caller "not reviewed yet" as opposed to "something went wrong". With
+--exit-code, a review that left comments exits 1 and a clean one exits 0, so
+a pipeline can carry on by itself:
+
+  $ git diff | sa && sa wait -q && git commit -m "..."`,
 	Args:         cobra.NoArgs,
 	RunE:         runWait,
 	SilenceUsage: true,
@@ -55,6 +61,9 @@ func init() {
 	f.DurationVar(&waitTimeout, "timeout", 0, "Give up after this long (0 waits forever)")
 	f.StringVar(&waitFormat, "format", "prompt", "Output format: prompt, markdown or json")
 	f.BoolVar(&waitJSON, "json", false, "Shorthand for --format json")
+	f.BoolVar(&waitExitCode, "exit-code", false,
+		"Exit 1 when the review left something to address, 0 when it did not")
+	f.BoolVarP(&waitQuiet, "quiet", "q", false, "Print nothing; implies --exit-code")
 }
 
 // exitNotReviewed is the status of a wait that timed out. It is not a
@@ -102,6 +111,13 @@ func runWait(cmd *cobra.Command, _ []string) error {
 
 // printReview writes the review the same way `sa comments` does.
 func printReview(ctx context.Context, c *client.Client, group string) error {
+	if waitQuiet {
+		comments, err := c.Comments(ctx, group)
+		if err != nil {
+			return err
+		}
+		return exitWithComments(comments)
+	}
 	format := waitFormat
 	if waitJSON {
 		format = "json"
@@ -118,13 +134,26 @@ func printReview(ctx context.Context, c *client.Client, group string) error {
 				open = append(open, cm)
 			}
 		}
-		return jsonEncoder(os.Stdout).Encode(open)
+		if err := jsonEncoder(os.Stdout).Encode(open); err != nil {
+			return err
+		}
+		if waitExitCode {
+			return exitWithComments(comments)
+		}
+		return nil
 	case "prompt", "markdown":
 		text, err := c.Prompt(ctx, group, false, format == "prompt")
 		if err != nil {
 			return err
 		}
 		fmt.Print(text)
+		if waitExitCode {
+			comments, err := c.Comments(ctx, group)
+			if err != nil {
+				return err
+			}
+			return exitWithComments(comments)
+		}
 		return nil
 	default:
 		return fmt.Errorf("unknown format %q: use prompt, markdown or json", format)

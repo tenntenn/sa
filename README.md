@@ -190,6 +190,26 @@ $ sa comments -t api             # comments of the "api" group
 $ sa comments --clear            # start the next review round
 ```
 
+### Putting it in a pipeline
+
+sa reads a diff on stdin and writes text on stdout, so it joins the commands
+you already run rather than replacing them. `sa comments` and `sa wait` also
+say what they found in their exit status — 0 when there is nothing to
+address, 1 when there is, 2 from `sa wait` when the review has not happened
+yet — which is enough to gate whatever comes next:
+
+```console
+$ git diff | sa
+$ sa wait -q && git commit -m "..."      # commit once the review is clean
+$ sa comments -q || echo "still something to fix"
+$ sa reviews --format jsonl | jq -r '.comments[].path' | sort | uniq -c
+```
+
+sa writes nothing into your working tree — the session, the log and the
+rebuilt previews all live outside it — so `git status` says the same before
+and after a review. Nothing opens a browser when stdout and stderr are not a
+terminal, so a job or a pipeline stays quiet unless you pass `--open`.
+
 ## Looking back at reviews
 
 Every submitted review is written down, so the rounds do not vanish with the
