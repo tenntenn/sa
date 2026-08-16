@@ -521,3 +521,58 @@ func TestUpdateCommentSuggestion(t *testing.T) {
 		t.Errorf("updated = %+v, want the suggestion added and the body kept", updated)
 	}
 }
+
+func TestCommentByPathResolvesFileAndSnippet(t *testing.T) {
+	ts, _ := newTestServer(t)
+	postJSON(t, ts.URL+"/_/api/groups/default/diffs", AddDiffRequest{Content: sampleDiff}, nil)
+
+	// An agent knows the path and the line, not sa's internal IDs.
+	var comment model.Comment
+	resp := postJSON(t, ts.URL+"/_/api/groups/default/comments", AddCommentRequest{
+		Path:      "README.md",
+		Author:    "claude",
+		Side:      "new",
+		StartLine: 2,
+		EndLine:   3,
+		Body:      "is this the wording you want?",
+	}, &comment)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %s", resp.Status)
+	}
+	if comment.DiffID == "" || comment.FileID == "" {
+		t.Errorf("comment was not attached to a file: %+v", comment)
+	}
+	if comment.Author != "claude" {
+		t.Errorf("author = %q", comment.Author)
+	}
+	// The reviewed code is filled in from the diff.
+	if comment.Snippet != "+new line\n+another line" {
+		t.Errorf("snippet = %q", comment.Snippet)
+	}
+
+	if prompt := getText(t, ts.URL+"/_/api/groups/default/prompt"); !strings.Contains(prompt, "From: claude") {
+		t.Errorf("prompt does not say who commented: %q", prompt)
+	}
+}
+
+func TestCommentByPathUnknownFile(t *testing.T) {
+	ts, _ := newTestServer(t)
+	postJSON(t, ts.URL+"/_/api/groups/default/diffs", AddDiffRequest{Content: sampleDiff}, nil)
+	resp := postJSON(t, ts.URL+"/_/api/groups/default/comments", AddCommentRequest{
+		Path: "nowhere.md", StartLine: 1, Body: "hi",
+	}, nil)
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("status = %s, want 404 for a file no diff carries", resp.Status)
+	}
+}
+
+func TestCommentByPathLineNotInDiff(t *testing.T) {
+	ts, _ := newTestServer(t)
+	postJSON(t, ts.URL+"/_/api/groups/default/diffs", AddDiffRequest{Content: sampleDiff}, nil)
+	resp := postJSON(t, ts.URL+"/_/api/groups/default/comments", AddCommentRequest{
+		Path: "README.md", StartLine: 900, Body: "hi",
+	}, nil)
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %s, want 400 for a line outside the diff", resp.Status)
+	}
+}

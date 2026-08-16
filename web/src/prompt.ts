@@ -23,6 +23,7 @@ export function buildPrompt(
     lines.push('', `## ${i + 1}. ${c.path}${lineRange(c)}`)
     const title = titles.get(c.diffId)
     if (title) lines.push('', `Diff: ${title}`)
+    if (c.author) lines.push('', `From: ${c.author}`)
     if (c.resolved) lines.push('', 'Status: resolved')
     const snippet = c.snippet.replace(/\n+$/, '')
     if (snippet) {

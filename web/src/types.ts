@@ -52,6 +52,8 @@ export interface Comment {
   diffId: string
   fileId: string
   path: string
+  /** author is set when the comment came from the command line. */
+  author?: string
   side: 'new' | 'old'
   startLine: number
   endLine: number

@@ -90,6 +90,11 @@ Review comments:
   $ sa comments --format json     # comments as JSON
   $ sa comments --clear           # start the next review round
 
+  They go the other way too: an agent can point at the lines it is unsure
+  about, and the human sees it next to the diff.
+
+  $ sa comment main.go:42 -m "Should this be a 404?" --author claude
+
 Exporting:
   sa export writes the review as one self-contained HTML page that needs no
   server, which is how a review travels to someone who does not run sa.
@@ -101,10 +106,11 @@ Starting and stopping:
   $ sa --shutdown                 # stop the server
   $ sa --restart                  # restart it, keeping the session
   $ sa --clear                    # drop the diffs and comments of a group`,
-	Args:          cobra.NoArgs,
-	RunE:          run,
-	SilenceUsage:  true,
-	SilenceErrors: false,
+	Args:         cobra.NoArgs,
+	RunE:         run,
+	SilenceUsage: true,
+	// Execute prints the error itself, prefixed with the command name.
+	SilenceErrors: true,
 	Version:       version.Version,
 }
 
@@ -138,7 +144,7 @@ func init() {
 	f.BoolVar(&allowRemote, "dangerously-allow-remote-access", false,
 		"Allow binding to a non-loopback address (no authentication!)")
 
-	rootCmd.AddCommand(commentsCmd, exportCmd, skillCmd)
+	rootCmd.AddCommand(commentCmd, commentsCmd, exportCmd, skillCmd)
 }
 
 func addr() string {

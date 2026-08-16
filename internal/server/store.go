@@ -288,6 +288,30 @@ func (s *Store) FileContext(group, diffID, fileID string) (*model.Diff, *model.F
 	return clone(d), clone(f), true
 }
 
+// FindFileByPath locates a file inside a group by its path. diffID narrows
+// the search to one diff; empty means the newest diff carrying that path,
+// which is the one an agent just sent.
+func (s *Store) FindFileByPath(group, diffID, path string) (*model.Diff, *model.File, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	g := s.group(group, false)
+	if g == nil {
+		return nil, nil, false
+	}
+	for i := len(g.Diffs) - 1; i >= 0; i-- {
+		d := g.Diffs[i]
+		if diffID != "" && d.ID != diffID {
+			continue
+		}
+		for _, f := range d.Files {
+			if f.Path() == path || f.OldPath == path {
+				return clone(d), clone(f), true
+			}
+		}
+	}
+	return nil, nil, false
+}
+
 // AddComment stores a review comment.
 func (s *Store) AddComment(c *model.Comment) (*model.Comment, error) {
 	s.mu.Lock()

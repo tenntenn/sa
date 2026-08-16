@@ -965,3 +965,13 @@ a {
 .diff-table .num.clickable {
   touch-action: none;
 }
+
+/* A comment written from the command line says who left it. */
+.badge.author {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.comment:has(.badge.author) {
+  border-left-color: var(--warn);
+}

@@ -68,6 +68,15 @@ func (c *Client) Group(ctx context.Context, group string) (*model.Group, error) 
 	return &g, nil
 }
 
+// AddComment leaves a review comment.
+func (c *Client) AddComment(ctx context.Context, group string, req server.AddCommentRequest) (*model.Comment, error) {
+	var out model.Comment
+	if err := c.do(ctx, http.MethodPost, c.url("/_/api/groups/%s/comments", url.PathEscape(group)), req, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
 // Comments returns the review comments of a group.
 func (c *Client) Comments(ctx context.Context, group string) ([]*model.Comment, error) {
 	var comments []*model.Comment

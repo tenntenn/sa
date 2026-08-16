@@ -129,6 +129,10 @@ type Comment struct {
 	DiffID string `json:"diffId"`
 	FileID string `json:"fileId"`
 	Path   string `json:"path"`
+	// Author names who left the comment. It is empty for the reviewer in
+	// the browser and set to something like "claude" when an agent writes
+	// the comment from the command line.
+	Author string `json:"author,omitempty"`
 	// Side is "new" or "old" and tells which side of the diff the line
 	// numbers belong to.
 	Side string `json:"side"`

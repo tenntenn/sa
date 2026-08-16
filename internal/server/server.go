@@ -381,8 +381,13 @@ func (s *Server) handleComments(w http.ResponseWriter, r *http.Request) {
 
 // AddCommentRequest is the body of POST /_/api/groups/{group}/comments.
 type AddCommentRequest struct {
-	DiffID     string `json:"diffId"`
-	FileID     string `json:"fileId"`
+	// DiffID and FileID identify the commented file. A client that only
+	// knows the path - an agent on the command line - may leave FileID
+	// empty and let the server resolve Path against the newest diff.
+	DiffID string `json:"diffId"`
+	FileID string `json:"fileId"`
+	// Author names who is commenting, empty for the reviewer in the browser.
+	Author     string `json:"author"`
 	Path       string `json:"path"`
 	Side       string `json:"side"`
 	StartLine  int    `json:"startLine"`
@@ -416,10 +421,31 @@ func (s *Server) handleAddComment(w http.ResponseWriter, r *http.Request) {
 	if req.EndLine < req.StartLine {
 		req.EndLine = req.StartLine
 	}
+	if req.FileID == "" {
+		if req.Path == "" {
+			http.Error(w, "a comment needs a fileId or a path", http.StatusBadRequest)
+			return
+		}
+		d, f, found := s.store.FindFileByPath(name, req.DiffID, req.Path)
+		if !found {
+			http.Error(w, fmt.Sprintf("no diff in group %q contains %s", name, req.Path), http.StatusNotFound)
+			return
+		}
+		req.DiffID, req.FileID = d.ID, f.ID
+		if req.Snippet == "" {
+			req.Snippet = diff.Snippet(f, req.Side, req.StartLine, req.EndLine)
+		}
+		if req.Snippet == "" {
+			http.Error(w, fmt.Sprintf("%s has no line %s in this diff", req.Path, lineSpec(req.StartLine, req.EndLine)),
+				http.StatusBadRequest)
+			return
+		}
+	}
 	c, err := s.store.AddComment(&model.Comment{
 		Group:      name,
 		DiffID:     req.DiffID,
 		FileID:     req.FileID,
+		Author:     req.Author,
 		Path:       req.Path,
 		Side:       req.Side,
 		StartLine:  req.StartLine,
@@ -441,6 +467,14 @@ type UpdateCommentRequest struct {
 	Body       *string `json:"body,omitempty"`
 	Suggestion *string `json:"suggestion,omitempty"`
 	Resolved   *bool   `json:"resolved,omitempty"`
+}
+
+// lineSpec formats a line range for an error message.
+func lineSpec(start, end int) string {
+	if end > start {
+		return fmt.Sprintf("%d-%d", start, end)
+	}
+	return strconv.Itoa(start)
 }
 
 func (s *Server) handleUpdateComment(w http.ResponseWriter, r *http.Request) {

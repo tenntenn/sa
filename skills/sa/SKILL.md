@@ -74,7 +74,22 @@ Tell the user the URL sa printed and say what you want reviewed. Then stop
 and wait for them. Do not poll `sa comments` in a loop and do not sleep
 waiting for input; the user tells you when they are done.
 
-### 3. Read the comments
+### 3. Leave your own comments, if you have any
+
+Before handing over, you can mark the places you are unsure about, so the
+human reviews them first. Always pass `--author` with your own name so the
+human can tell your notes from theirs:
+
+```
+sa comment <path>:<line> -m "<question or note>" --author <you> --target <topic>
+sa comment <path>:<line>-<line> -m "..." --suggest "<replacement>" --author <you>
+```
+
+Use it for what is genuinely worth a human's attention — a decision you had
+to guess at, a trade-off, something you could not verify. A comment on every
+change is noise, not a review.
+
+### 4. Read the comments
 
 ```
 sa comments --target <topic>
@@ -87,23 +102,25 @@ range, the reviewed code and the comment body. For programmatic handling:
 sa comments --target <topic> --format json
 ```
 
-Every JSON entry has `id`, `path`, `side` (`new` or `old`), `startLine`,
-`endLine`, `body`, `snippet`, `suggestion` and `resolved`. Line numbers refer
-to the side named by `side`.
+Every JSON entry has `id`, `path`, `author`, `side` (`new` or `old`),
+`startLine`, `endLine`, `body`, `snippet`, `suggestion` and `resolved`. Line
+numbers refer to the side named by `side`. `author` is empty for the comments
+the human wrote in the browser and set for the ones posted from the command
+line — including your own, so skip those when working through the list.
 
 A comment may carry a suggested replacement. In the Markdown output it is a
 fenced ` ```suggestion ` block under a line naming the file and the lines it
 replaces; in JSON it is the `suggestion` field. Apply it verbatim to exactly
 those lines unless it is wrong, and say so if you do not.
 
-### 4. Act on every comment
+### 5. Act on every comment
 
 Work through the comments one by one. Change the code where the comment asks
 for a change, and replace the named lines exactly as written where a comment
 carries a suggestion; when you disagree or a comment cannot be acted on, say
 so explicitly in your reply to the user rather than silently skipping it.
 
-### 5. Send the next round
+### 6. Send the next round
 
 Clear the handled comments and send the updated diff so the next round starts
 clean:
@@ -135,6 +152,8 @@ artifact).
 | `... \| sa -t <name>` | Add it to a named group (its own URL and comments) |
 | `... \| sa --title "..."` | Give the diff a title shown in the UI |
 | `... \| sa --no-open` | Do not open a browser (useful in headless runs) |
+| `sa comment <path>:<line> -m "..."` | Leave a comment of your own (pass `--author`) |
+| `sa comment --json` | Post many comments at once, read from stdin |
 | `sa comments [-t <name>]` | Print open comments as Markdown |
 | `sa comments --format json` | Print comments as JSON |
 | `sa comments --include-resolved` | Include comments the human resolved |

@@ -86,6 +86,31 @@ $ sa --shutdown        # stop the server
   would leave a column too narrow to read — and **Open in mo** opens the real
   mo page in its own tab.
 
+### Comments from an agent
+
+The loop goes both ways: an agent can point at the lines it is unsure about,
+ask a question, or propose a change, and you see it in the browser next to
+the diff, labelled with who wrote it.
+
+```console
+$ sa comment internal/server/server.go:120 -m "Should this be a 404?" --author claude
+$ sa comment README.md:12-18 -m "Reworded" --suggest-file new.md --author claude
+$ cat new.txt | sa comment main.go:42 -m "Simpler" --suggest -
+```
+
+The lines are the ones the diff shows (`--side old` for a removed line), the
+file is looked up in the newest diff carrying that path, and sa fills in the
+reviewed code itself. A whole self review can be posted at once:
+
+```console
+$ sa comment --json --author claude <<'EOF'
+[
+  {"path": "cmd/root.go", "line": "88", "body": "left over from the old flag"},
+  {"path": "README.md", "line": "12-18", "body": "reworded", "suggestion": "..."}
+]
+EOF
+```
+
 ### Reading the comments back
 
 ```console

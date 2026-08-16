@@ -67,6 +67,7 @@ function CommentItem({
   return (
     <div className={`comment${comment.resolved ? ' resolved' : ''}`}>
       <div className="comment-meta">
+        {comment.author && <span className="badge author">{comment.author}</span>}
         <span className="comment-range">{rangeLabel(comment)}</span>
         {comment.suggestion && !editing && <span className="badge">suggestion</span>}
         {comment.resolved && <span className="badge">resolved</span>}

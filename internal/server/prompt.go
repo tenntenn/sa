@@ -45,6 +45,9 @@ func Prompt(g *model.Group, opts PromptOptions) string {
 		if title := titles[c.DiffID]; title != "" {
 			fmt.Fprintf(&b, "\nDiff: %s\n", title)
 		}
+		if c.Author != "" {
+			fmt.Fprintf(&b, "\nFrom: %s\n", c.Author)
+		}
 		if c.Resolved {
 			b.WriteString("\nStatus: resolved\n")
 		}

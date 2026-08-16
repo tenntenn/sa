@@ -44,3 +44,42 @@ func Reconstruct(f *model.File) (content string, complete bool) {
 	}
 	return b.String(), complete
 }
+
+// Snippet returns the lines of a file between start and end on the given
+// side, each keeping its diff marker. It is what a comment stores so that it
+// still says something outside the browser.
+func Snippet(f *model.File, side string, start, end int) string {
+	var b strings.Builder
+	for _, h := range f.Hunks {
+		for _, l := range h.Lines {
+			num := l.NewNumber
+			if side == "old" {
+				num = l.OldNumber
+			}
+			if num < start || num > end {
+				continue
+			}
+			if side == "old" && l.Kind == model.LineAdd {
+				continue
+			}
+			if side != "old" && l.Kind == model.LineDelete {
+				continue
+			}
+			b.WriteString(marker(l.Kind))
+			b.WriteString(l.Content)
+			b.WriteString("\n")
+		}
+	}
+	return strings.TrimRight(b.String(), "\n")
+}
+
+func marker(kind model.LineKind) string {
+	switch kind {
+	case model.LineAdd:
+		return "+"
+	case model.LineDelete:
+		return "-"
+	default:
+		return " "
+	}
+}
