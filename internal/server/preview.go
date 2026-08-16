@@ -8,9 +8,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/tenntenn/sa/internal/diff"
 	"github.com/tenntenn/sa/internal/mo"
 	"github.com/tenntenn/sa/internal/model"
+	"github.com/tenntenn/sa/internal/source"
 )
 
 // errNotPreviewable is returned for files mo cannot show.
@@ -94,17 +94,15 @@ func moGroupName(group string) string {
 
 // resolve returns the path of the Markdown handed to mo. The working tree
 // file wins because it is the complete document; when it is missing, the new
-// side is rebuilt from the diff.
-func (p *previewer) resolve(group string, d *model.Diff, f *model.File) (path string, source PreviewSource, complete bool, err error) {
+// side is rebuilt from the diff and written to the cache directory so that mo
+// has a file to open.
+func (p *previewer) resolve(group string, d *model.Diff, f *model.File) (path string, src PreviewSource, complete bool, err error) {
 	rel := f.Path()
-	if abs := absPath(d.BaseDir, rel); abs != "" {
-		if st, err := os.Stat(abs); err == nil && st.Mode().IsRegular() {
-			return abs, SourceWorktree, true, nil
-		}
+	got := source.NewSide(d.BaseDir, f)
+	if got.Kind == source.FromWorktree {
+		return got.Path, SourceWorktree, got.Complete, nil
 	}
-
-	content, complete := diff.Reconstruct(f)
-	if strings.TrimSpace(content) == "" {
+	if strings.TrimSpace(got.Content) == "" {
 		return "", "", false, fmt.Errorf("%w: nothing to preview for %s", errNotPreviewable, rel)
 	}
 	if p.cacheDir == "" {
@@ -116,26 +114,12 @@ func (p *previewer) resolve(group string, d *model.Diff, f *model.File) (path st
 	}
 	// Rewriting an unchanged file would make mo reload the preview for
 	// nothing, so only write when the content actually differs.
-	if old, err := os.ReadFile(dst); err != nil || string(old) != content {
-		if err := os.WriteFile(dst, []byte(content), 0o600); err != nil {
+	if old, err := os.ReadFile(dst); err != nil || string(old) != got.Content {
+		if err := os.WriteFile(dst, []byte(got.Content), 0o600); err != nil {
 			return "", "", false, err
 		}
 	}
-	return dst, SourceReconstructed, complete, nil
-}
-
-// absPath resolves a diff path against the directory the diff was sent from.
-func absPath(baseDir, rel string) string {
-	if rel == "" {
-		return ""
-	}
-	if filepath.IsAbs(rel) {
-		return filepath.Clean(rel)
-	}
-	if baseDir == "" {
-		return ""
-	}
-	return filepath.Clean(filepath.Join(baseDir, filepath.FromSlash(rel)))
+	return dst, SourceReconstructed, got.Complete, nil
 }
 
 // safeRelPath makes a diff path usable inside the cache directory.

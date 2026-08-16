@@ -59,6 +59,15 @@ func (c *Client) AddDiff(ctx context.Context, group string, req server.AddDiffRe
 	return &res, nil
 }
 
+// Group returns a whole group: its diffs and its comments.
+func (c *Client) Group(ctx context.Context, group string) (*model.Group, error) {
+	var g model.Group
+	if err := c.do(ctx, http.MethodGet, c.url("/_/api/groups/%s", url.PathEscape(group)), nil, &g); err != nil {
+		return nil, err
+	}
+	return &g, nil
+}
+
 // Comments returns the review comments of a group.
 func (c *Client) Comments(ctx context.Context, group string) ([]*model.Comment, error) {
 	var comments []*model.Comment

@@ -80,6 +80,25 @@ $ sa comments -t api             # comments of the "api" group
 $ sa comments --clear            # start the next review round
 ```
 
+## Exporting a review
+
+`sa export` writes the whole review as one self-contained HTML page: the same
+UI, with the diff frozen into it and no server, no mo and no network behind
+it. It is how a review reaches someone who does not run sa — attached to a
+mail, dropped in a bucket, or published as an artifact.
+
+```console
+$ git diff | sa export review.html    # straight from stdin, no server needed
+$ sa export -t api review.html        # the "api" group of a running server
+$ git diff | sa export                # to stdout
+$ git diff | sa export --fragment page.html   # body only, to embed elsewhere
+```
+
+On an exported page the diff is read-only, but reviewing still works:
+comments can be written, resolved and edited (they are kept in that browser),
+Markdown is rendered by the page itself instead of mo, and **Copy prompt**
+produces exactly what `sa comments` would.
+
 ## Agent skill
 
 sa ships a vendor neutral agent skill: plain Markdown with YAML front matter
@@ -118,6 +137,7 @@ because the embedded frontend is not part of it.
 | Session state | `$XDG_STATE_HOME/sa/session-<port>.json` |
 | Server log | `$XDG_STATE_HOME/sa/server-<port>.log` |
 | Rebuilt previews | `$XDG_CACHE_HOME/sa/preview/…` |
+| Exported pages | wherever you point `sa export` |
 
 sa binds to loopback and has no authentication; `--dangerously-allow-remote-access`
 is required to bind anywhere else.

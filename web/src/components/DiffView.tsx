@@ -1,7 +1,7 @@
 import { Fragment, useMemo, useState } from 'react'
 import type { Comment, Diff, FileDiff, Hunk, Line, ViewMode } from '../types'
 import { filePath } from '../types'
-import { addComment } from '../api'
+import { client } from '../client'
 import { wordDiff } from '../wordDiff'
 import { CommentForm, CommentThread } from './CommentThread'
 
@@ -76,7 +76,7 @@ export function DiffView({ group, diff, file, comments, onChanged }: Props) {
 
   const submitComment = async (body: string) => {
     if (!selection) return
-    await addComment(group, {
+    await client.addComment(group, {
       diffId: diff.id,
       fileId: file.id,
       path: filePath(file),
@@ -196,6 +196,12 @@ function isSelected(selection: Selection | null, side: Side, line: number): bool
 function UnifiedTable({ hunks, selection, onSelect, renderExtras }: TableProps) {
   return (
     <table className="diff-table unified">
+      <colgroup>
+        <col className="col-num" />
+        <col className="col-num" />
+        <col className="col-marker" />
+        <col />
+      </colgroup>
       <tbody>
         {hunks.map((hunk, hi) => (
           <Fragment key={hi}>
@@ -283,6 +289,12 @@ function buildSplitRows(lines: Line[]): SplitRow[] {
 function SplitTable({ hunks, selection, onSelect, renderExtras }: TableProps) {
   return (
     <table className="diff-table split">
+      <colgroup>
+        <col className="col-num" />
+        <col className="col-side" />
+        <col className="col-num" />
+        <col className="col-side" />
+      </colgroup>
       <tbody>
         {hunks.map((hunk, hi) => (
           <Fragment key={hi}>

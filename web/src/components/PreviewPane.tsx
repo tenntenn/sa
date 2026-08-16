@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import type { FileDiff, Preview, Status } from '../types'
+import type { FileDiff, Status } from '../types'
 import { filePath } from '../types'
-import { getPreview } from '../api'
+import { client, type PreviewResult } from '../client'
 
 interface Props {
   group: string
@@ -11,13 +11,15 @@ interface Props {
 }
 
 /**
- * PreviewPane shows the Markdown preview rendered by mo next to the diff.
+ * PreviewPane shows the Markdown preview next to the diff.
  *
- * mo forbids framing with "frame-ancestors 'none'", so sa serves it through
- * its own loopback proxy, which relaxes that one directive for sa's origin.
+ * In the live app the preview is rendered by mo. mo forbids framing with
+ * "frame-ancestors 'none'", so sa serves it through its own loopback proxy,
+ * which relaxes that one directive for sa's origin. An exported page has no
+ * mo behind it and renders the frozen Markdown itself.
  */
 export function PreviewPane({ group, diffId, file, status }: Props) {
-  const [preview, setPreview] = useState<Preview | null>(null)
+  const [preview, setPreview] = useState<PreviewResult | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [reloadKey, setReloadKey] = useState(0)
@@ -33,7 +35,8 @@ export function PreviewPane({ group, diffId, file, status }: Props) {
     let cancelled = false
     setLoading(true)
     setError(null)
-    getPreview(group, diffId, file.id)
+    client
+      .preview(group, diffId, file.id)
       .then((p) => {
         if (!cancelled) setPreview(p)
       })
@@ -80,10 +83,12 @@ export function PreviewPane({ group, diffId, file, status }: Props) {
           </>
         )}
         <span className="spacer" />
-        <button className="ghost" onClick={() => setReloadKey((k) => k + 1)} disabled={!previewable}>
-          Reload
-        </button>
-        {preview?.moUrl && (
+        {!client.isStatic && (
+          <button className="ghost" onClick={() => setReloadKey((k) => k + 1)} disabled={!previewable}>
+            Reload
+          </button>
+        )}
+        {preview?.kind === 'frame' && preview.moUrl && (
           <a className="ghost button" href={preview.moUrl} target="_blank" rel="noreferrer">
             Open in mo
           </a>
@@ -93,7 +98,7 @@ export function PreviewPane({ group, diffId, file, status }: Props) {
       {!file.isMarkdown ? (
         <p className="empty">{filePath(file)} is not Markdown, so there is nothing to preview.</p>
       ) : loading ? (
-        <p className="empty">Asking mo for a preview…</p>
+        <p className="empty">{client.isStatic ? 'Rendering…' : 'Asking mo for a preview…'}</p>
       ) : error ? (
         <div className="preview-error">
           <p className="error">{error}</p>
@@ -108,9 +113,11 @@ export function PreviewPane({ group, diffId, file, status }: Props) {
             </p>
           )}
         </div>
-      ) : preview?.url ? (
+      ) : preview?.kind === 'html' ? (
+        <div className="markdown" dangerouslySetInnerHTML={{ __html: preview.html }} />
+      ) : preview?.kind === 'frame' && preview.url ? (
         <iframe className="preview-frame" src={preview.url} title="Markdown preview" />
-      ) : preview?.moUrl ? (
+      ) : preview?.kind === 'frame' && preview.moUrl ? (
         <div className="preview-error">
           <p className="error">The preview cannot be embedded here.</p>
           <p className="hint">

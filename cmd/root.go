@@ -90,6 +90,12 @@ Review comments:
   $ sa comments --format json     # comments as JSON
   $ sa comments --clear           # start the next review round
 
+Exporting:
+  sa export writes the review as one self-contained HTML page that needs no
+  server, which is how a review travels to someone who does not run sa.
+
+  $ git diff | sa export review.html
+
 Starting and stopping:
   $ sa --status                   # what is being reviewed
   $ sa --shutdown                 # stop the server
@@ -132,7 +138,7 @@ func init() {
 	f.BoolVar(&allowRemote, "dangerously-allow-remote-access", false,
 		"Allow binding to a non-loopback address (no authentication!)")
 
-	rootCmd.AddCommand(commentsCmd, skillCmd)
+	rootCmd.AddCommand(commentsCmd, exportCmd, skillCmd)
 }
 
 func addr() string {

@@ -1,0 +1,174 @@
+package export_test
+
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"testing/fstest"
+	"time"
+
+	"github.com/tenntenn/sa/internal/diff"
+	"github.com/tenntenn/sa/internal/export"
+	"github.com/tenntenn/sa/internal/model"
+)
+
+const sampleDiff = `diff --git a/docs/new.md b/docs/new.md
+new file mode 100644
+--- /dev/null
++++ b/docs/new.md
+@@ -0,0 +1,2 @@
++# New
++body
+diff --git a/main.go b/main.go
+--- a/main.go
++++ b/main.go
+@@ -1,2 +1,2 @@
+ package main
+-var x = 1
++var x = 2
+`
+
+func group(t *testing.T, baseDir string) *model.Group {
+	t.Helper()
+	files := diff.Parse(sampleDiff)
+	if len(files) != 2 {
+		t.Fatalf("got %d files, want 2", len(files))
+	}
+	return &model.Group{
+		Name: "default",
+		Diffs: []*model.Diff{{
+			ID:      "d1",
+			Title:   "first",
+			BaseDir: baseDir,
+			Raw:     sampleDiff,
+			Files:   files,
+		}},
+	}
+}
+
+func TestBuildFreezesMarkdown(t *testing.T) {
+	p := export.Build(group(t, ""), "test", time.Now())
+
+	if len(p.Diffs) != 1 {
+		t.Fatalf("got %d diffs, want 1", len(p.Diffs))
+	}
+	if p.Diffs[0].Raw != "" {
+		t.Error("the raw diff should be dropped from the page")
+	}
+	if len(p.Previews) != 1 {
+		t.Fatalf("got %d previews, want 1 (only Markdown files)", len(p.Previews))
+	}
+	md := p.Diffs[0].Files[0]
+	prev, ok := p.Previews["d1:"+md.ID]
+	if !ok {
+		t.Fatalf("no preview for %s", md.Path())
+	}
+	if prev.Content != "# New\nbody\n" || !prev.Complete {
+		t.Errorf("preview = %+v", prev)
+	}
+	if prev.Source != string("reconstructed") {
+		t.Errorf("source = %q, want reconstructed for a file that is not on disk", prev.Source)
+	}
+}
+
+func TestBuildPrefersWorktree(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "docs"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "docs", "new.md"), []byte("# From disk\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	p := export.Build(group(t, dir), "test", time.Now())
+	for _, prev := range p.Previews {
+		if prev.Source != "worktree" || prev.Content != "# From disk\n" {
+			t.Errorf("preview = %+v, want the working tree file", prev)
+		}
+	}
+}
+
+func assets() fstest.MapFS {
+	return fstest.MapFS{
+		"assets/index.css": {Data: []byte(".diff{color:red}")},
+		"assets/index.js":  {Data: []byte("console.log('sa')")},
+	}
+}
+
+func TestRenderStandalonePage(t *testing.T) {
+	p := export.Build(group(t, ""), "test", time.Now())
+	page, err := export.Render(p, assets(), export.Options{Title: "review of x"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"<!doctype html>",
+		"<title>review of x</title>",
+		".diff{color:red}",
+		"console.log('sa')",
+		`<div id="root"></div>`,
+		"window.__SA_DATA__ = {",
+		"</html>",
+	} {
+		if !strings.Contains(page, want) {
+			t.Errorf("page is missing %q", want)
+		}
+	}
+	// The page has to stand on its own: no request back to a sa server.
+	if strings.Contains(page, "/_/api/") {
+		t.Error("the exported page references the sa API")
+	}
+}
+
+func TestRenderFragmentHasNoDocumentTags(t *testing.T) {
+	p := export.Build(group(t, ""), "test", time.Now())
+	page, err := export.Render(p, assets(), export.Options{Fragment: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, unwanted := range []string{"<!doctype", "<html", "<head", "<body"} {
+		if strings.Contains(strings.ToLower(page), unwanted) {
+			t.Errorf("fragment contains %q", unwanted)
+		}
+	}
+	if !strings.Contains(page, `<div id="root"></div>`) {
+		t.Error("fragment has no mount point")
+	}
+}
+
+func TestRenderEmbedsReadableJSON(t *testing.T) {
+	p := export.Build(group(t, ""), "test", time.Now())
+	page, err := export.Render(p, assets(), export.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	const prefix = "window.__SA_DATA__ = "
+	start := strings.Index(page, prefix)
+	if start < 0 {
+		t.Fatal("no payload in the page")
+	}
+	rest := page[start+len(prefix):]
+	end := strings.Index(rest, ";</script>")
+	if end < 0 {
+		t.Fatal("payload is not terminated")
+	}
+	var decoded export.Payload
+	if err := json.Unmarshal([]byte(rest[:end]), &decoded); err != nil {
+		t.Fatalf("payload is not valid JSON: %v", err)
+	}
+	if decoded.Group != "default" || len(decoded.Diffs) != 1 {
+		t.Errorf("payload = %+v", decoded)
+	}
+	// encoding/json escapes the characters that could end the script early.
+	if strings.Contains(rest[:end], "</script") {
+		t.Error("payload can terminate its own script element")
+	}
+}
+
+func TestRenderNeedsBuiltUI(t *testing.T) {
+	p := export.Build(group(t, ""), "test", time.Now())
+	if _, err := export.Render(p, fstest.MapFS{}, export.Options{}); err == nil {
+		t.Fatal("want an error when the UI is not built into the binary")
+	}
+}

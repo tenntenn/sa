@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { Comment } from '../types'
-import { deleteComment, updateComment } from '../api'
+import { client } from '../client'
 
 interface ThreadProps {
   group: string
@@ -70,7 +70,7 @@ function CommentItem({
               disabled={busy || body.trim() === ''}
               onClick={() =>
                 run(async () => {
-                  await updateComment(group, comment.id, { body })
+                  await client.updateComment(group, comment.id, { body })
                   setEditing(false)
                 })
               }
@@ -96,7 +96,7 @@ function CommentItem({
             <button
               className="ghost"
               disabled={busy}
-              onClick={() => run(() => updateComment(group, comment.id, { resolved: !comment.resolved }))}
+              onClick={() => run(() => client.updateComment(group, comment.id, { resolved: !comment.resolved }))}
             >
               {comment.resolved ? 'Reopen' : 'Resolve'}
             </button>
@@ -106,7 +106,7 @@ function CommentItem({
             <button
               className="ghost danger"
               disabled={busy}
-              onClick={() => run(() => deleteComment(group, comment.id))}
+              onClick={() => run(() => client.deleteComment(group, comment.id))}
             >
               Delete
             </button>

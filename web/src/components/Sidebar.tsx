@@ -1,6 +1,6 @@
 import type { Comment, Diff, Status } from '../types'
 import { filePath } from '../types'
-import { deleteDiff } from '../api'
+import { client } from '../client'
 
 interface Props {
   group: string
@@ -26,15 +26,17 @@ export function Sidebar({ group, diffs, comments, status, selected, onSelect, on
             <span className="diff-group-title" title={new Date(diff.createdAt).toLocaleString()}>
               {diff.title}
             </span>
-            <button
-              className="ghost danger"
-              title="Remove this diff"
-              onClick={() => {
-                void deleteDiff(group, diff.id).then(onChanged)
-              }}
-            >
-              ×
-            </button>
+            {!client.isStatic && (
+              <button
+                className="ghost danger"
+                title="Remove this diff"
+                onClick={() => {
+                  void client.deleteDiff(group, diff.id).then(onChanged)
+                }}
+              >
+                ×
+              </button>
+            )}
           </div>
           <ul className="file-list">
             {diff.files.map((file) => {

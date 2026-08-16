@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { getGroup, getPrompt, getStatus, groupFromLocation, subscribe } from './api'
+import { groupFromLocation } from './api'
+import { client } from './client'
 import type { Comment, Diff, FileDiff, Status } from './types'
 import { DiffView } from './components/DiffView'
 import { PreviewPane } from './components/PreviewPane'
@@ -12,7 +13,10 @@ interface Selected {
 }
 
 export function App() {
-  const group = useMemo(groupFromLocation, [])
+  const group = useMemo(
+    () => (client.isStatic ? staticGroupName() : groupFromLocation()),
+    [],
+  )
   const [diffs, setDiffs] = useState<Diff[]>([])
   const [comments, setComments] = useState<Comment[]>([])
   const [status, setStatus] = useState<Status | null>(null)
@@ -23,10 +27,10 @@ export function App() {
 
   const reload = useCallback(async () => {
     try {
-      const [g, st] = await Promise.all([getGroup(group), getStatus()])
-      setDiffs(g.diffs ?? [])
-      setComments(g.comments ?? [])
-      setStatus(st)
+      const data = await client.load(group)
+      setDiffs(data.diffs)
+      setComments(data.comments)
+      setStatus(data.status)
       setError(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
@@ -35,7 +39,7 @@ export function App() {
 
   useEffect(() => {
     void reload()
-    return subscribe(group, () => {
+    return client.subscribe(group, () => {
       void reload()
     })
   }, [group, reload])
@@ -75,7 +79,7 @@ export function App() {
 
   const copyPrompt = async () => {
     try {
-      const text = await getPrompt(group)
+      const text = await client.prompt(group)
       await navigator.clipboard.writeText(text)
       setCopied(true)
       window.setTimeout(() => setCopied(false), 1500)
@@ -93,6 +97,17 @@ export function App() {
           {diffs.length} diff(s) · {comments.length} comment(s)
           {openComments > 0 ? ` · ${openComments} open` : ''}
         </span>
+        {client.isStatic && (
+          <span
+            className="badge"
+            title={
+              'This page was written with `sa export`. The diff is frozen and ' +
+              'comments are kept in this browser.'
+            }
+          >
+            exported{client.exportedAt ? ` ${new Date(client.exportedAt).toLocaleString()}` : ''}
+          </span>
+        )}
         <span className="spacer" />
         <button className="ghost" onClick={() => void copyPrompt()} disabled={comments.length === 0}>
           {copied ? 'Copied' : 'Copy prompt'}
@@ -123,7 +138,7 @@ export function App() {
         <main className="content">
           {diffs.length === 0 ? (
             <div className="welcome">
-              <h1>Waiting for a diff</h1>
+              <h1>{client.isStatic ? 'This page carries no diff' : 'Waiting for a diff'}</h1>
               <p>Pipe one in — sa adds it to this page:</p>
               <pre>
                 <code>
@@ -166,4 +181,9 @@ export function App() {
       </div>
     </div>
   )
+}
+
+/** staticGroupName reads the group an exported page was written for. */
+function staticGroupName(): string {
+  return window.__SA_DATA__?.group ?? 'default'
 }

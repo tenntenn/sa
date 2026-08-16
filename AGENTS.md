@@ -13,6 +13,7 @@ Short version:
 $ git diff | sa --target <topic>   # opens the review page, prints its URL
 $ sa comments --target <topic>     # the comments the human left
 $ sa comments --target <topic> --clear
+$ git diff | sa export --target <topic> review.html   # a page that needs no server
 ```
 
 ## Working on sa

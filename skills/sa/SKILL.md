@@ -107,6 +107,20 @@ sa comments --target <topic> --clear
 git diff | sa --target <topic>
 ```
 
+### Sharing a review without sa
+
+When the human cannot run sa — a review that travels by mail, a page for
+someone else, an artifact — write the review out as a single HTML file:
+
+```
+git diff | sa export --target <topic> review.html
+```
+
+The page carries the diff and the same UI, needs no server, and the comments
+written on it stay in that browser. Use `--fragment` when the page is
+embedded into something that brings its own `<html>` (for example an
+artifact).
+
 ## Command reference
 
 | Command | What it does |
@@ -122,6 +136,8 @@ git diff | sa --target <topic>
 | `sa --status [--json]` | Show the running server, its groups and comment counts |
 | `sa --clear -t <name>` | Drop the diffs and comments of a group |
 | `sa --shutdown` | Stop the server |
+| `... \| sa export <file>` | Write the review as one self-contained HTML page |
+| `... \| sa export --fragment <file>` | The same, body only, for embedding |
 
 `--port` (default 6280) selects the server; use it only if the user runs sa
 on a non-default port.
