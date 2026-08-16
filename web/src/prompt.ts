@@ -29,15 +29,31 @@ export function buildPrompt(
       const fence = fenceFor(snippet)
       lines.push('', fence, snippet, fence)
     }
-    lines.push('')
-    for (const line of c.body.replace(/\n+$/, '').split('\n')) lines.push(`> ${line}`)
+    const body = c.body.replace(/\n+$/, '')
+    if (body) {
+      lines.push('')
+      for (const line of body.split('\n')) lines.push(`> ${line}`)
+    }
+    const suggestion = (c.suggestion ?? '').replace(/\n+$/, '')
+    if (suggestion) {
+      const fence = fenceFor(suggestion)
+      lines.push(
+        '',
+        `Suggested replacement for ${c.path}${lineRange(c)}:`,
+        '',
+        `${fence}suggestion`,
+        suggestion,
+        fence,
+      )
+    }
   })
 
   lines.push(
     '',
     '---',
     '',
-    'Address every comment above. When a comment is not worth acting on, say why instead of changing the code.',
+    'Address every comment above. A suggestion block replaces the lines it names, verbatim. ' +
+      'When a comment is not worth acting on, say why instead of changing the code.',
   )
   return lines.join('\n') + '\n'
 }

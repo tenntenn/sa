@@ -38,7 +38,7 @@ export interface SaClient {
   readonly exportedAt?: string
   load(group: string): Promise<GroupData>
   addComment(group: string, comment: api.NewComment): Promise<void>
-  updateComment(group: string, id: string, patch: { body?: string; resolved?: boolean }): Promise<void>
+  updateComment(group: string, id: string, patch: api.CommentPatch): Promise<void>
   deleteComment(group: string, id: string): Promise<void>
   deleteDiff(group: string, diffId: string): Promise<void>
   prompt(group: string): Promise<string>
@@ -162,6 +162,7 @@ function createStaticClient(data: StaticPayload): SaClient {
         endLine: comment.endLine,
         body: comment.body,
         snippet: comment.snippet,
+        suggestion: comment.suggestion,
         resolved: false,
         createdAt: now,
         updatedAt: now,
@@ -175,6 +176,7 @@ function createStaticClient(data: StaticPayload): SaClient {
             ? {
                 ...c,
                 body: patch.body ?? c.body,
+                suggestion: patch.suggestion ?? c.suggestion,
                 resolved: patch.resolved ?? c.resolved,
                 updatedAt: new Date().toISOString(),
               }

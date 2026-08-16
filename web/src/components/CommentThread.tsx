@@ -19,6 +19,11 @@ export function CommentThread({ group, comments, onChanged }: ThreadProps) {
   )
 }
 
+function rangeLabel(c: Pick<Comment, 'path' | 'side' | 'startLine' | 'endLine'>): string {
+  const lines = c.endLine > c.startLine ? `${c.startLine}-${c.endLine}` : `${c.startLine}`
+  return `${c.path}:${lines}${c.side === 'old' ? ' (old)' : ''}`
+}
+
 function CommentItem({
   group,
   comment,
@@ -30,8 +35,10 @@ function CommentItem({
 }) {
   const [editing, setEditing] = useState(false)
   const [body, setBody] = useState(comment.body)
+  const [suggestion, setSuggestion] = useState(comment.suggestion ?? '')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
 
   const run = async (fn: () => Promise<unknown>) => {
     setBusy(true)
@@ -46,14 +53,22 @@ function CommentItem({
     }
   }
 
+  const copySuggestion = async () => {
+    if (!comment.suggestion) return
+    try {
+      await navigator.clipboard.writeText(comment.suggestion)
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 1500)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    }
+  }
+
   return (
     <div className={`comment${comment.resolved ? ' resolved' : ''}`}>
       <div className="comment-meta">
-        <span className="comment-range">
-          {comment.path}:{comment.startLine}
-          {comment.endLine > comment.startLine ? `-${comment.endLine}` : ''}
-          {comment.side === 'old' ? ' (old)' : ''}
-        </span>
+        <span className="comment-range">{rangeLabel(comment)}</span>
+        {comment.suggestion && !editing && <span className="badge">suggestion</span>}
         {comment.resolved && <span className="badge">resolved</span>}
       </div>
 
@@ -64,13 +79,21 @@ function CommentItem({
             value={body}
             onChange={(ev) => setBody(ev.target.value)}
             rows={Math.max(3, body.split('\n').length)}
+            placeholder="What should change here?"
+          />
+          <label className="field-label">Suggested replacement (empty to drop it)</label>
+          <textarea
+            className="comment-input suggestion-input"
+            value={suggestion}
+            onChange={(ev) => setSuggestion(ev.target.value)}
+            rows={Math.max(2, suggestion.split('\n').length)}
           />
           <div className="comment-actions">
             <button
-              disabled={busy || body.trim() === ''}
+              disabled={busy || (body.trim() === '' && suggestion.trim() === '')}
               onClick={() =>
                 run(async () => {
-                  await client.updateComment(group, comment.id, { body })
+                  await client.updateComment(group, comment.id, { body, suggestion })
                   setEditing(false)
                 })
               }
@@ -82,6 +105,7 @@ function CommentItem({
               disabled={busy}
               onClick={() => {
                 setBody(comment.body)
+                setSuggestion(comment.suggestion ?? '')
                 setEditing(false)
               }}
             >
@@ -91,7 +115,20 @@ function CommentItem({
         </>
       ) : (
         <>
-          <div className="comment-body">{comment.body}</div>
+          {comment.body && <div className="comment-body">{comment.body}</div>}
+          {comment.suggestion && (
+            <div className="suggestion">
+              <div className="suggestion-head">
+                <span>Replaces {rangeLabel(comment)}</span>
+                <button className="ghost" onClick={() => void copySuggestion()}>
+                  {copied ? 'Copied' : 'Copy'}
+                </button>
+              </div>
+              <pre>
+                <code>{comment.suggestion}</code>
+              </pre>
+            </div>
+          )}
           <div className="comment-actions">
             <button
               className="ghost"
@@ -119,24 +156,34 @@ function CommentItem({
 }
 
 interface FormProps {
-  onSubmit: (body: string) => Promise<void>
+  onSubmit: (body: string, suggestion: string) => Promise<void>
   onCancel: () => void
   label: string
+  /** seed is the current text of the selected lines, the starting point of a
+   * suggested replacement. */
+  seed: string
+  /** canSuggest is false for lines that only exist in the old file. */
+  canSuggest: boolean
+  /** hint explains how to grow the selection. */
+  hint?: string
 }
 
-/** CommentForm writes a new comment for the selected lines. */
-export function CommentForm({ onSubmit, onCancel, label }: FormProps) {
+/** CommentForm writes a new comment, with an optional suggested replacement. */
+export function CommentForm({ onSubmit, onCancel, label, seed, canSuggest, hint }: FormProps) {
   const [body, setBody] = useState('')
+  const [suggestion, setSuggestion] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const submit = async () => {
-    if (body.trim() === '') return
+    const proposed = suggestion ?? ''
+    if (body.trim() === '' && proposed.trim() === '') return
     setBusy(true)
     setError(null)
     try {
-      await onSubmit(body)
+      await onSubmit(body, proposed)
       setBody('')
+      setSuggestion(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
@@ -148,11 +195,12 @@ export function CommentForm({ onSubmit, onCancel, label }: FormProps) {
     <div className="comment-form">
       <div className="comment-meta">
         <span className="comment-range">{label}</span>
+        {hint && <span className="hint">{hint}</span>}
       </div>
       <textarea
         className="comment-input"
         autoFocus
-        rows={4}
+        rows={3}
         placeholder="What should change here?"
         value={body}
         onChange={(ev) => setBody(ev.target.value)}
@@ -161,10 +209,34 @@ export function CommentForm({ onSubmit, onCancel, label }: FormProps) {
           if (ev.key === 'Enter' && (ev.metaKey || ev.ctrlKey)) void submit()
         }}
       />
+      {suggestion !== null && (
+        <>
+          <label className="field-label">Suggested replacement for these lines</label>
+          <textarea
+            className="comment-input suggestion-input"
+            rows={Math.max(2, suggestion.split('\n').length)}
+            value={suggestion}
+            onChange={(ev) => setSuggestion(ev.target.value)}
+            onKeyDown={(ev) => {
+              if (ev.key === 'Enter' && (ev.metaKey || ev.ctrlKey)) void submit()
+            }}
+          />
+        </>
+      )}
       <div className="comment-actions">
-        <button disabled={busy || body.trim() === ''} onClick={() => void submit()}>
+        <button disabled={busy || (body.trim() === '' && (suggestion ?? '').trim() === '')} onClick={() => void submit()}>
           Comment
         </button>
+        {canSuggest &&
+          (suggestion === null ? (
+            <button className="ghost" disabled={busy} onClick={() => setSuggestion(seed)}>
+              Suggest a change
+            </button>
+          ) : (
+            <button className="ghost" disabled={busy} onClick={() => setSuggestion(null)}>
+              Drop the suggestion
+            </button>
+          ))}
         <button className="ghost" disabled={busy} onClick={onCancel}>
           Cancel
         </button>

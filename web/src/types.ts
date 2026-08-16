@@ -57,6 +57,8 @@ export interface Comment {
   endLine: number
   body: string
   snippet: string
+  /** suggestion is the replacement proposed for the commented lines. */
+  suggestion?: string
   resolved: boolean
   createdAt: string
   updatedAt: string

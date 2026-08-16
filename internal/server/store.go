@@ -307,8 +307,16 @@ func (s *Store) AddComment(c *model.Comment) (*model.Comment, error) {
 	return clone(c), nil
 }
 
-// UpdateComment edits the body or the resolved flag of a comment.
-func (s *Store) UpdateComment(group, id string, body *string, resolved *bool) (*model.Comment, bool) {
+// CommentPatch carries the fields of a comment that can be edited. A nil
+// field is left alone.
+type CommentPatch struct {
+	Body       *string
+	Suggestion *string
+	Resolved   *bool
+}
+
+// UpdateComment edits a comment in place.
+func (s *Store) UpdateComment(group, id string, patch CommentPatch) (*model.Comment, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	g := s.group(group, false)
@@ -319,11 +327,14 @@ func (s *Store) UpdateComment(group, id string, body *string, resolved *bool) (*
 		if c.ID != id {
 			continue
 		}
-		if body != nil {
-			c.Body = *body
+		if patch.Body != nil {
+			c.Body = *patch.Body
 		}
-		if resolved != nil {
-			c.Resolved = *resolved
+		if patch.Suggestion != nil {
+			c.Suggestion = *patch.Suggestion
+		}
+		if patch.Resolved != nil {
+			c.Resolved = *patch.Resolved
 		}
 		c.UpdatedAt = time.Now()
 		s.persist()

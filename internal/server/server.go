@@ -381,14 +381,15 @@ func (s *Server) handleComments(w http.ResponseWriter, r *http.Request) {
 
 // AddCommentRequest is the body of POST /_/api/groups/{group}/comments.
 type AddCommentRequest struct {
-	DiffID    string `json:"diffId"`
-	FileID    string `json:"fileId"`
-	Path      string `json:"path"`
-	Side      string `json:"side"`
-	StartLine int    `json:"startLine"`
-	EndLine   int    `json:"endLine"`
-	Body      string `json:"body"`
-	Snippet   string `json:"snippet"`
+	DiffID     string `json:"diffId"`
+	FileID     string `json:"fileId"`
+	Path       string `json:"path"`
+	Side       string `json:"side"`
+	StartLine  int    `json:"startLine"`
+	EndLine    int    `json:"endLine"`
+	Body       string `json:"body"`
+	Snippet    string `json:"snippet"`
+	Suggestion string `json:"suggestion"`
 }
 
 func (s *Server) handleAddComment(w http.ResponseWriter, r *http.Request) {
@@ -401,8 +402,12 @@ func (s *Server) handleAddComment(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid request: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	if strings.TrimSpace(req.Body) == "" {
-		http.Error(w, "empty comment", http.StatusBadRequest)
+	if strings.TrimSpace(req.Body) == "" && strings.TrimSpace(req.Suggestion) == "" {
+		http.Error(w, "a comment needs a body or a suggestion", http.StatusBadRequest)
+		return
+	}
+	if strings.TrimSpace(req.Suggestion) != "" && req.Side == "old" {
+		http.Error(w, "a suggestion replaces lines of the new file, not of the old one", http.StatusBadRequest)
 		return
 	}
 	if req.Side != "old" {
@@ -412,15 +417,16 @@ func (s *Server) handleAddComment(w http.ResponseWriter, r *http.Request) {
 		req.EndLine = req.StartLine
 	}
 	c, err := s.store.AddComment(&model.Comment{
-		Group:     name,
-		DiffID:    req.DiffID,
-		FileID:    req.FileID,
-		Path:      req.Path,
-		Side:      req.Side,
-		StartLine: req.StartLine,
-		EndLine:   req.EndLine,
-		Body:      req.Body,
-		Snippet:   req.Snippet,
+		Group:      name,
+		DiffID:     req.DiffID,
+		FileID:     req.FileID,
+		Path:       req.Path,
+		Side:       req.Side,
+		StartLine:  req.StartLine,
+		EndLine:    req.EndLine,
+		Body:       req.Body,
+		Snippet:    req.Snippet,
+		Suggestion: req.Suggestion,
 	})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -432,8 +438,9 @@ func (s *Server) handleAddComment(w http.ResponseWriter, r *http.Request) {
 
 // UpdateCommentRequest is the body of PATCH .../comments/{id}.
 type UpdateCommentRequest struct {
-	Body     *string `json:"body,omitempty"`
-	Resolved *bool   `json:"resolved,omitempty"`
+	Body       *string `json:"body,omitempty"`
+	Suggestion *string `json:"suggestion,omitempty"`
+	Resolved   *bool   `json:"resolved,omitempty"`
 }
 
 func (s *Server) handleUpdateComment(w http.ResponseWriter, r *http.Request) {
@@ -446,7 +453,11 @@ func (s *Server) handleUpdateComment(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid request: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	c, found := s.store.UpdateComment(name, r.PathValue("id"), req.Body, req.Resolved)
+	c, found := s.store.UpdateComment(name, r.PathValue("id"), CommentPatch{
+		Body:       req.Body,
+		Suggestion: req.Suggestion,
+		Resolved:   req.Resolved,
+	})
 	if !found {
 		http.Error(w, "no such comment", http.StatusNotFound)
 		return

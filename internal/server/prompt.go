@@ -52,18 +52,32 @@ func Prompt(g *model.Group, opts PromptOptions) string {
 			fence := fenceFor(snippet)
 			fmt.Fprintf(&b, "\n%s\n%s\n%s\n", fence, snippet, fence)
 		}
-		b.WriteString("\n")
-		for _, line := range strings.Split(strings.TrimRight(c.Body, "\n"), "\n") {
-			fmt.Fprintf(&b, "> %s\n", line)
+		if body := strings.TrimRight(c.Body, "\n"); body != "" {
+			b.WriteString("\n")
+			for _, line := range strings.Split(body, "\n") {
+				fmt.Fprintf(&b, "> %s\n", line)
+			}
+		}
+		if suggestion := strings.TrimRight(c.Suggestion, "\n"); suggestion != "" {
+			// The lines above are to be replaced by exactly this.
+			fence := fenceFor(suggestion)
+			fmt.Fprintf(&b, "\nSuggested replacement for %s:\n\n%ssuggestion\n%s\n%s\n",
+				lineRangeText(c), fence, suggestion, fence)
 		}
 	}
 
 	if !opts.NoInstruction {
 		b.WriteString("\n---\n\n")
-		b.WriteString("Address every comment above. When a comment is not worth acting on, " +
-			"say why instead of changing the code.\n")
+		b.WriteString("Address every comment above. A suggestion block replaces the lines it " +
+			"names, verbatim. When a comment is not worth acting on, say why instead of " +
+			"changing the code.\n")
 	}
 	return b.String()
+}
+
+// lineRangeText names the lines a suggestion replaces, e.g. "path:12-18".
+func lineRangeText(c *model.Comment) string {
+	return c.Path + lineRange(c)
 }
 
 // lineRange formats the reviewed line range, e.g. ":12-18 (old)".

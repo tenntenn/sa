@@ -59,8 +59,13 @@ $ sa --shutdown        # stop the server
 
 ### Reviewing
 
-- Click a line number to select a line, shift-click another to select a range,
-  then write the comment.
+- Select the lines to comment on by dragging over the line numbers, by
+  shift-clicking, or - on a touch screen - by tapping one line and then
+  another while the draft is open.
+- **Suggest a change** turns a comment into a proposed replacement for those
+  lines, pre-filled with what they say today. `sa comments` writes it as a
+  ` ```suggestion ` block naming the lines it replaces, so an agent can apply
+  it verbatim.
 - Comments can be resolved, edited and deleted, and they survive a reload.
 - **Copy prompt** puts every open comment on the clipboard, ready for a coding
   agent.

@@ -57,6 +57,14 @@ export interface NewComment {
   endLine: number
   body: string
   snippet: string
+  suggestion?: string
+}
+
+/** CommentPatch is what can be edited on an existing comment. */
+export interface CommentPatch {
+  body?: string
+  suggestion?: string
+  resolved?: boolean
 }
 
 export function addComment(group: string, comment: NewComment): Promise<Comment> {
@@ -67,11 +75,7 @@ export function addComment(group: string, comment: NewComment): Promise<Comment>
   })
 }
 
-export function updateComment(
-  group: string,
-  id: string,
-  patch: { body?: string; resolved?: boolean },
-): Promise<Comment> {
+export function updateComment(group: string, id: string, patch: CommentPatch): Promise<Comment> {
   return request<Comment>(`/_/api/groups/${encodeURIComponent(group)}/comments/${encodeURIComponent(id)}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },

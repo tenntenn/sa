@@ -431,3 +431,93 @@ func TestFileContentNeedsMarkdown(t *testing.T) {
 		t.Fatalf("status = %s, want 400 for a non Markdown file", resp.Status)
 	}
 }
+
+func TestSuggestionInPrompt(t *testing.T) {
+	ts, _ := newTestServer(t)
+	var added AddDiffResponse
+	postJSON(t, ts.URL+"/_/api/groups/default/diffs", AddDiffRequest{Content: sampleDiff}, &added)
+	file := added.Diff.Files[0]
+
+	var comment model.Comment
+	resp := postJSON(t, ts.URL+"/_/api/groups/default/comments", AddCommentRequest{
+		DiffID:     added.Diff.ID,
+		FileID:     file.ID,
+		Path:       file.Path(),
+		Side:       "new",
+		StartLine:  2,
+		EndLine:    3,
+		Snippet:    "+new line\n+another line",
+		Suggestion: "a better line\nand another",
+	}, &comment)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %s", resp.Status)
+	}
+	// A suggestion is a complete comment on its own: no body needed.
+	if comment.Suggestion != "a better line\nand another" {
+		t.Fatalf("comment = %+v", comment)
+	}
+
+	prompt := getText(t, ts.URL+"/_/api/groups/default/prompt")
+	if !strings.Contains(prompt, "```suggestion\na better line\nand another\n```") {
+		t.Errorf("prompt lacks an applicable suggestion block: %q", prompt)
+	}
+	if !strings.Contains(prompt, "Suggested replacement for README.md:2-3") {
+		t.Errorf("prompt does not name the replaced lines: %q", prompt)
+	}
+}
+
+func TestSuggestionOnlyOnTheNewSide(t *testing.T) {
+	ts, _ := newTestServer(t)
+	var added AddDiffResponse
+	postJSON(t, ts.URL+"/_/api/groups/default/diffs", AddDiffRequest{Content: sampleDiff}, &added)
+	file := added.Diff.Files[0]
+	resp := postJSON(t, ts.URL+"/_/api/groups/default/comments", AddCommentRequest{
+		DiffID: added.Diff.ID, FileID: file.ID, Path: file.Path(),
+		Side: "old", StartLine: 2, EndLine: 2, Suggestion: "nope",
+	}, nil)
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %s, want 400 for a suggestion on the old side", resp.Status)
+	}
+}
+
+func TestEmptyCommentRejected(t *testing.T) {
+	ts, _ := newTestServer(t)
+	var added AddDiffResponse
+	postJSON(t, ts.URL+"/_/api/groups/default/diffs", AddDiffRequest{Content: sampleDiff}, &added)
+	resp := postJSON(t, ts.URL+"/_/api/groups/default/comments", AddCommentRequest{
+		DiffID: added.Diff.ID, FileID: added.Diff.Files[0].ID, Path: "README.md", StartLine: 1,
+	}, nil)
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %s, want 400 for a comment with neither body nor suggestion", resp.Status)
+	}
+}
+
+func TestUpdateCommentSuggestion(t *testing.T) {
+	ts, _ := newTestServer(t)
+	var added AddDiffResponse
+	postJSON(t, ts.URL+"/_/api/groups/default/diffs", AddDiffRequest{Content: sampleDiff}, &added)
+	var comment model.Comment
+	postJSON(t, ts.URL+"/_/api/groups/default/comments", AddCommentRequest{
+		DiffID: added.Diff.ID, FileID: added.Diff.Files[0].ID, Path: "README.md",
+		Side: "new", StartLine: 2, EndLine: 2, Body: "hmm",
+	}, &comment)
+
+	req, err := http.NewRequest(http.MethodPatch,
+		ts.URL+"/_/api/groups/default/comments/"+comment.ID,
+		strings.NewReader(`{"suggestion":"replaced"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	var updated model.Comment
+	if err := json.NewDecoder(res.Body).Decode(&updated); err != nil {
+		t.Fatal(err)
+	}
+	if updated.Suggestion != "replaced" || updated.Body != "hmm" {
+		t.Errorf("updated = %+v, want the suggestion added and the body kept", updated)
+	}
+}

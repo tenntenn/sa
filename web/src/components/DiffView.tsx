@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import type { Comment, Diff, FileDiff, Hunk, Line, ViewMode } from '../types'
 import { filePath } from '../types'
 import { client } from '../client'
@@ -67,17 +67,57 @@ export function DiffView({ group, diff, file, comments, narrow = false, onChange
     return map
   }, [comments])
 
-  const select = (side: Side, line: number, extend: boolean) => {
+  // A range is selected by dragging over the line numbers, by shift-clicking,
+  // or - which is what a touch screen has - by tapping another line while the
+  // draft is still open. The draft form only appears once the drag is over:
+  // inserting it mid-drag would push the rows under the pointer away.
+  const dragging = useRef(false)
+  const [drafting, setDrafting] = useState(true)
+
+  useEffect(() => {
+    const stop = () => {
+      if (!dragging.current) return
+      dragging.current = false
+      setDrafting(true)
+    }
+    window.addEventListener('pointerup', stop)
+    window.addEventListener('pointercancel', stop)
+    return () => {
+      window.removeEventListener('pointerup', stop)
+      window.removeEventListener('pointercancel', stop)
+    }
+  }, [])
+
+  const extendTo = (side: Side, line: number) => {
     if (line <= 0) return
     setSelection((current) => {
-      if (extend && current && current.side === side) {
-        return { side, start: Math.min(current.start, line), end: Math.max(current.end, line) }
+      if (!current || current.side !== side) return { side, start: line, end: line }
+      if (line < current.start) return { ...current, start: line }
+      return { ...current, end: line }
+    })
+  }
+
+  const select = (side: Side, line: number, extend: boolean) => {
+    if (line <= 0) return
+    dragging.current = true
+    setDrafting(false)
+    setSelection((current) => {
+      const grow = extend || (current !== null && current.side === side)
+      if (grow && current && current.side === side) {
+        if (line < current.start) return { ...current, start: line }
+        return { ...current, end: line }
       }
       return { side, start: line, end: line }
     })
   }
 
-  const submitComment = async (body: string) => {
+  // Dragging across the gutter grows the range under the pointer.
+  const dragOver = (side: Side, line: number) => {
+    if (!dragging.current) return
+    extendTo(side, line)
+  }
+
+  const submitComment = async (body: string, suggestion: string) => {
     if (!selection) return
     await client.addComment(group, {
       diffId: diff.id,
@@ -88,6 +128,7 @@ export function DiffView({ group, diff, file, comments, narrow = false, onChange
       endLine: selection.end,
       body,
       snippet: snippetFor(file, selection),
+      suggestion: suggestion.trim() === '' ? undefined : suggestion,
     })
     setSelection(null)
     onChanged()
@@ -100,16 +141,19 @@ export function DiffView({ group, diff, file, comments, narrow = false, onChange
 
   const renderExtras = (side: Side, line: number) => {
     const anchored = commentsByAnchor.get(anchorKey(side, line)) ?? []
-    const showForm = selection !== null && selection.side === side && selection.end === line
+    const showForm = drafting && selection !== null && selection.side === side && selection.end === line
     if (anchored.length === 0 && !showForm) return null
     return (
       <>
         {anchored.length > 0 && (
           <CommentThread group={group} comments={anchored} onChanged={onChanged} />
         )}
-        {showForm && (
+        {showForm && selection && (
           <CommentForm
             label={selectionLabel}
+            seed={currentText(file, selection)}
+            canSuggest={selection.side === 'new'}
+            hint="Drag or tap another line number to cover more lines"
             onSubmit={submitComment}
             onCancel={() => setSelection(null)}
           />
@@ -173,6 +217,7 @@ export function DiffView({ group, diff, file, comments, narrow = false, onChange
           hunks={file.hunks}
           selection={selection}
           onSelect={select}
+          onDragOver={dragOver}
           renderExtras={renderExtras}
         />
       ) : (
@@ -180,6 +225,7 @@ export function DiffView({ group, diff, file, comments, narrow = false, onChange
           hunks={file.hunks}
           selection={selection}
           onSelect={select}
+          onDragOver={dragOver}
           renderExtras={renderExtras}
         />
       )}
@@ -191,6 +237,7 @@ interface TableProps {
   hunks: Hunk[]
   selection: Selection | null
   onSelect: (side: Side, line: number, extend: boolean) => void
+  onDragOver: (side: Side, line: number) => void
   renderExtras: (side: Side, line: number) => React.ReactNode
 }
 
@@ -203,7 +250,7 @@ function isSelected(selection: Selection | null, side: Side, line: number): bool
   )
 }
 
-function UnifiedTable({ hunks, selection, onSelect, renderExtras }: TableProps) {
+function UnifiedTable({ hunks, selection, onSelect, onDragOver, renderExtras }: TableProps) {
   return (
     <table className="diff-table unified">
       <colgroup>
@@ -231,13 +278,15 @@ function UnifiedTable({ hunks, selection, onSelect, renderExtras }: TableProps) 
                   <tr className={`line ${line.kind}${isSelected(selection, side, num) ? ' selected' : ''}`}>
                     <td
                       className="num clickable"
-                      onClick={(ev) => onSelect('old', line.oldNumber, ev.shiftKey)}
+                      onPointerDown={(ev) => onSelect('old', line.oldNumber, ev.shiftKey)}
+                      onPointerEnter={() => onDragOver('old', line.oldNumber)}
                     >
                       {line.oldNumber > 0 ? line.oldNumber : ''}
                     </td>
                     <td
                       className="num clickable"
-                      onClick={(ev) => onSelect('new', line.newNumber, ev.shiftKey)}
+                      onPointerDown={(ev) => onSelect('new', line.newNumber, ev.shiftKey)}
+                      onPointerEnter={() => onDragOver('new', line.newNumber)}
                     >
                       {line.newNumber > 0 ? line.newNumber : ''}
                     </td>
@@ -296,7 +345,7 @@ function buildSplitRows(lines: Line[]): SplitRow[] {
   return rows
 }
 
-function SplitTable({ hunks, selection, onSelect, renderExtras }: TableProps) {
+function SplitTable({ hunks, selection, onSelect, onDragOver, renderExtras }: TableProps) {
   return (
     <table className="diff-table split">
       <colgroup>
@@ -326,7 +375,8 @@ function SplitTable({ hunks, selection, onSelect, renderExtras }: TableProps) {
                   <tr className="line">
                     <td
                       className={`num clickable${isSelected(selection, 'old', row.left?.oldNumber ?? -1) ? ' selected' : ''}`}
-                      onClick={(ev) => row.left && onSelect('old', row.left.oldNumber, ev.shiftKey)}
+                      onPointerDown={(ev) => row.left && onSelect('old', row.left.oldNumber, ev.shiftKey)}
+                      onPointerEnter={() => row.left && onDragOver('old', row.left.oldNumber)}
                     >
                       {row.left && row.left.oldNumber > 0 ? row.left.oldNumber : ''}
                     </td>
@@ -340,7 +390,8 @@ function SplitTable({ hunks, selection, onSelect, renderExtras }: TableProps) {
                     </td>
                     <td
                       className={`num clickable${isSelected(selection, 'new', row.right?.newNumber ?? -1) ? ' selected' : ''}`}
-                      onClick={(ev) => row.right && onSelect('new', row.right.newNumber, ev.shiftKey)}
+                      onPointerDown={(ev) => row.right && onSelect('new', row.right.newNumber, ev.shiftKey)}
+                      onPointerEnter={() => row.right && onDragOver('new', row.right.newNumber)}
                     >
                       {row.right && row.right.newNumber > 0 ? row.right.newNumber : ''}
                     </td>
@@ -387,18 +438,33 @@ function renderSegments(content: string, segments: { text: string; changed: bool
   )
 }
 
-/** snippetFor collects the reviewed lines so the comment stays readable
- * outside the browser, for instance in `sa comments`. */
-function snippetFor(file: FileDiff, selection: Selection): string {
-  const out: string[] = []
+/** selectedLines returns the lines of the selected range on its side. */
+function selectedLines(file: FileDiff, selection: Selection): Line[] {
+  const out: Line[] = []
   for (const hunk of file.hunks) {
     for (const line of hunk.lines) {
       const num = selection.side === 'old' ? line.oldNumber : line.newNumber
       if (num < selection.start || num > selection.end) continue
       if (selection.side === 'old' && line.kind === 'add') continue
       if (selection.side === 'new' && line.kind === 'delete') continue
-      out.push(`${marker(line.kind)}${line.content}`)
+      out.push(line)
     }
   }
-  return out.join('\n')
+  return out
+}
+
+/** snippetFor collects the reviewed lines so the comment stays readable
+ * outside the browser, for instance in `sa comments`. */
+function snippetFor(file: FileDiff, selection: Selection): string {
+  return selectedLines(file, selection)
+    .map((line) => `${marker(line.kind)}${line.content}`)
+    .join('\n')
+}
+
+/** currentText is what the selected lines say today, which is where a
+ * suggested replacement starts from. */
+function currentText(file: FileDiff, selection: Selection): string {
+  return selectedLines(file, selection)
+    .map((line) => line.content)
+    .join('\n')
 }

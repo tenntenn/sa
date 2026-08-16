@@ -138,10 +138,14 @@ type Comment struct {
 	Body      string `json:"body"`
 	// Snippet is the reviewed code, kept so that the comment stays
 	// meaningful once it is exported as a prompt.
-	Snippet   string    `json:"snippet"`
-	Resolved  bool      `json:"resolved"`
-	CreatedAt time.Time `json:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt"`
+	Snippet string `json:"snippet"`
+	// Suggestion is the replacement the reviewer proposes for the commented
+	// lines, empty when the comment only says something. It is what an agent
+	// can apply verbatim.
+	Suggestion string    `json:"suggestion,omitempty"`
+	Resolved   bool      `json:"resolved"`
+	CreatedAt  time.Time `json:"createdAt"`
+	UpdatedAt  time.Time `json:"updatedAt"`
 }
 
 // Group is a named collection of diffs and their review comments, served

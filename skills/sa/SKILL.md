@@ -88,14 +88,20 @@ sa comments --target <topic> --format json
 ```
 
 Every JSON entry has `id`, `path`, `side` (`new` or `old`), `startLine`,
-`endLine`, `body`, `snippet` and `resolved`. Line numbers refer to the side
-named by `side`.
+`endLine`, `body`, `snippet`, `suggestion` and `resolved`. Line numbers refer
+to the side named by `side`.
+
+A comment may carry a suggested replacement. In the Markdown output it is a
+fenced ` ```suggestion ` block under a line naming the file and the lines it
+replaces; in JSON it is the `suggestion` field. Apply it verbatim to exactly
+those lines unless it is wrong, and say so if you do not.
 
 ### 4. Act on every comment
 
 Work through the comments one by one. Change the code where the comment asks
-for a change; when you disagree or a comment cannot be acted on, say so
-explicitly in your reply to the user rather than silently skipping it.
+for a change, and replace the named lines exactly as written where a comment
+carries a suggestion; when you disagree or a comment cannot be acted on, say
+so explicitly in your reply to the user rather than silently skipping it.
 
 ### 5. Send the next round
 
