@@ -40,7 +40,26 @@ https://github.com/k1LoW/mo/releases).
 
 ## Workflow
 
-### 1. Send the diff
+### 1. Start from a clean page
+
+A group keeps whatever was left in it: diffs from an earlier task, comments
+nobody cleared, hooks from a session that ended. Mixing last week's change
+into today's review costs the human the attention you asked for, so close the
+old review before opening a new one:
+
+```
+sa --status --json                  # what is the group holding?
+sa --clear --target <topic>         # close it: diffs, comments and hooks
+```
+
+Two exceptions, both of which mean "do not clear":
+
+- You are sending the **next round** of a review you already started. Then
+  the diffs belong together; clear the handled comments instead (step 7).
+- The group holds **comments the human wrote that you have not addressed**.
+  Say what is in there and ask before throwing it away.
+
+### 2. Send the diff
 
 Pipe the diff into `sa` and use `--target` to name the review, so several
 reviews can be open at once without mixing their comments:
@@ -74,7 +93,7 @@ Use `--json` when you want to parse the result:
 git diff | sa --target <topic> --json
 ```
 
-### 2. Hand the URL to the human, and decide how you come back
+### 3. Hand the URL to the human, and decide how you come back
 
 Tell the user the URL sa printed and say what you want reviewed. Then pick
 one of these — never poll `sa comments` in a loop:
@@ -98,7 +117,7 @@ one of these — never poll `sa comments` in a loop:
 - **Neither**: say you will pick the review up next time, and stop. Nothing
   is lost — the comments stay in the sa server until they are cleared.
 
-### 3. Leave your own comments, if you have any
+### 4. Leave your own comments, if you have any
 
 Before handing over, you can mark the places you are unsure about, so the
 human reviews them first. Always pass `--author` with your own name so the
@@ -119,7 +138,7 @@ Use it for what is genuinely worth a human's attention — a decision you had
 to guess at, a trade-off, something you could not verify. A comment on every
 change is noise, not a review.
 
-### 4. Read the comments
+### 5. Read the comments
 
 ```
 sa comments --target <topic>
@@ -145,17 +164,18 @@ the lines the block replaces; in JSON they are the `suggestions` array. Apply
 each block verbatim to exactly those lines unless it is wrong, and say so if
 you do not.
 
-### 5. Act on every comment
+### 6. Act on every comment
 
 Work through the comments one by one. Change the code where the comment asks
 for a change, and replace the named lines exactly as written where a comment
 carries a suggestion; when you disagree or a comment cannot be acted on, say
 so explicitly in your reply to the user rather than silently skipping it.
 
-### 6. Send the next round
+### 7. Send the next round
 
 Clear the handled comments and send the updated diff so the next round starts
-clean:
+clean. This is the one case where the diffs stay: the rounds of one review
+belong together.
 
 ```
 sa comments --target <topic> --clear
