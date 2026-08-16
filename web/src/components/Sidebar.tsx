@@ -3,8 +3,9 @@ import { filePath } from '../types'
 import { client } from '../client'
 
 interface Props {
-  /** width in pixels; 0 collapses the file list out of the way. */
-  width: number
+  /** width in pixels; 0 collapses the file list out of the way and null lets
+   * it fill the space, which is what a phone does. */
+  width: number | null
   group: string
   diffs: Diff[]
   comments: Comment[]
@@ -29,8 +30,8 @@ export function Sidebar({
 
   return (
     <aside
-      className={`sidebar${width === 0 ? ' collapsed' : ''}`}
-      style={{ width }}
+      className={`sidebar${width === 0 ? ' collapsed' : ''}${width === null ? ' fill' : ''}`}
+      style={width === null ? undefined : { width }}
       aria-hidden={width === 0}
     >
       {diffs.length === 0 && <p className="empty">No diff yet.</p>}

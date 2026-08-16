@@ -7,11 +7,15 @@ import { Divider } from './components/Divider'
 import { PreviewPane } from './components/PreviewPane'
 import { Sidebar } from './components/Sidebar'
 import { clampRatio, SplitPane, SPLIT_DEFAULT } from './components/SplitPane'
+import { useNarrowLayout } from './useMediaQuery'
 
 interface Selected {
   diffId: string
   fileId: string
 }
+
+/** Pane names the three panes, which a phone shows one at a time. */
+type Pane = 'files' | 'diff' | 'preview'
 
 // The file list is a pane like the others: it can be dragged narrow, and
 // pulling it past the snapping point puts it away entirely.
@@ -40,15 +44,14 @@ function storedSidebarWidth(): number {
 }
 
 export function App() {
-  const group = useMemo(
-    () => (client.isStatic ? staticGroupName() : groupFromLocation()),
-    [],
-  )
+  const group = useMemo(() => (client.isStatic ? staticGroupName() : groupFromLocation()), [])
+  const narrow = useNarrowLayout()
   const [diffs, setDiffs] = useState<Diff[]>([])
   const [comments, setComments] = useState<Comment[]>([])
   const [status, setStatus] = useState<Status | null>(null)
   const [selected, setSelected] = useState<Selected | null>(null)
   const [splitRatio, setSplitRatio] = useState(storedSplitRatio)
+  const [pane, setPane] = useState<Pane>('diff')
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const [sidebarWidth, setSidebarWidth] = useState(storedSidebarWidth)
@@ -127,6 +130,7 @@ export function App() {
     [comments, selected],
   )
   const openComments = comments.filter((c) => !c.resolved).length
+  const fileCount = diffs.reduce((total, diff) => total + diff.files.length, 0)
 
   const copyPrompt = async () => {
     try {
@@ -139,12 +143,72 @@ export function App() {
     }
   }
 
+  const selectFile = (diffId: string, fileId: string) => {
+    setSelected({ diffId, fileId })
+    // On a phone the file list covers the screen, so picking a file means
+    // "show me this diff".
+    if (narrow) setPane('diff')
+  }
+
+  const sidebar = (
+    <Sidebar
+      width={narrow ? null : sidebarWidth}
+      group={group}
+      diffs={diffs}
+      comments={comments}
+      status={status}
+      selected={selected}
+      onSelect={selectFile}
+      onChanged={() => void reload()}
+    />
+  )
+
+  const diffPane =
+    selectedDiff && selectedFile ? (
+      <DiffView
+        group={group}
+        diff={selectedDiff}
+        file={selectedFile}
+        comments={fileComments}
+        narrow={narrow}
+        onChanged={() => void reload()}
+      />
+    ) : (
+      <p className="empty">Select a file.</p>
+    )
+
+  const previewPane = (
+    <PreviewPane
+      group={group}
+      diffId={selectedDiff?.id ?? null}
+      file={selectedFile}
+      status={status}
+    />
+  )
+
+  const welcome = (
+    <div className="welcome">
+      <h1>{client.isStatic ? 'This page carries no diff' : 'Waiting for a diff'}</h1>
+      <p>Pipe one in — sa adds it to this page:</p>
+      <pre>
+        <code>
+          git diff | sa{group === 'default' ? '' : ` --target ${group}`}
+          {'\n'}diff -u old.md new.md | sa{group === 'default' ? '' : ` --target ${group}`}
+        </code>
+      </pre>
+      <p className="hint">
+        Comments you leave here are readable from the command line with{' '}
+        <code>sa comments{group === 'default' ? '' : ` -t ${group}`}</code>.
+      </p>
+    </div>
+  )
+
   return (
-    <div className="app">
+    <div className={`app${narrow ? ' narrow' : ''}`}>
       <header className="topbar">
         <span className="brand">sa</span>
         <span className="group">{group}</span>
-        <span className="hint">
+        <span className="hint counts">
           {diffs.length} diff(s) · {comments.length} comment(s)
           {openComments > 0 ? ` · ${openComments} open` : ''}
         </span>
@@ -156,104 +220,110 @@ export function App() {
               'comments are kept in this browser.'
             }
           >
-            exported{client.exportedAt ? ` ${new Date(client.exportedAt).toLocaleString()}` : ''}
+            exported
+            {client.exportedAt && (
+              <span className="exported-at"> {new Date(client.exportedAt).toLocaleString()}</span>
+            )}
           </span>
         )}
         <span className="spacer" />
         <button className="ghost" onClick={() => void copyPrompt()} disabled={comments.length === 0}>
           {copied ? 'Copied' : 'Copy prompt'}
         </button>
-        <label className="switch">
-          <input type="checkbox" checked={sidebarWidth > 0} onChange={toggleSidebar} />
-          Files
-        </label>
-        <label className="switch">
-          <input
-            type="checkbox"
-            checked={splitRatio > 0}
-            onChange={toggleDiff}
-            disabled={diffs.length === 0}
-          />
-          Diff
-        </label>
-        <label className="switch">
-          <input
-            type="checkbox"
-            checked={splitRatio < 1}
-            onChange={togglePreview}
-            disabled={diffs.length === 0}
-          />
-          Preview
-        </label>
+        {!narrow && (
+          <>
+            <label className="switch">
+              <input type="checkbox" checked={sidebarWidth > 0} onChange={toggleSidebar} />
+              Files
+            </label>
+            <label className="switch">
+              <input
+                type="checkbox"
+                checked={splitRatio > 0}
+                onChange={toggleDiff}
+                disabled={diffs.length === 0}
+              />
+              Diff
+            </label>
+            <label className="switch">
+              <input
+                type="checkbox"
+                checked={splitRatio < 1}
+                onChange={togglePreview}
+                disabled={diffs.length === 0}
+              />
+              Preview
+            </label>
+          </>
+        )}
       </header>
+
+      {narrow && diffs.length > 0 && (
+        <nav className="tabs" aria-label="Panes">
+          <button
+            className={pane === 'files' ? 'active' : ''}
+            aria-pressed={pane === 'files'}
+            onClick={() => setPane('files')}
+          >
+            Files<span className="tab-count">{fileCount}</span>
+          </button>
+          <button
+            className={pane === 'diff' ? 'active' : ''}
+            aria-pressed={pane === 'diff'}
+            onClick={() => setPane('diff')}
+          >
+            Diff
+            {fileComments.length > 0 && <span className="tab-count">{fileComments.length}</span>}
+          </button>
+          <button
+            className={pane === 'preview' ? 'active' : ''}
+            aria-pressed={pane === 'preview'}
+            onClick={() => setPane('preview')}
+            disabled={!selectedFile?.isMarkdown}
+            title={selectedFile?.isMarkdown ? undefined : 'Only Markdown files have a preview'}
+          >
+            Preview
+          </button>
+        </nav>
+      )}
 
       {error && <div className="error banner">{error}</div>}
 
-      <div className="body" ref={bodyRef}>
-        <Sidebar
-          width={sidebarWidth}
-          group={group}
-          diffs={diffs}
-          comments={comments}
-          status={status}
-          selected={selected}
-          onSelect={(diffId, fileId) => setSelected({ diffId, fileId })}
-          onChanged={() => void reload()}
-        />
-        <Divider
-          label="Resize the file list"
-          onDrag={resizeSidebar}
-          onReset={toggleSidebar}
-          onNudge={(direction) =>
-            setSidebarWidth((w) => Math.min(SIDEBAR_MAX, Math.max(0, w + direction * SIDEBAR_STEP)))
-          }
-        />
-
-        <main className="content">
+      {narrow ? (
+        <div className="body">
           {diffs.length === 0 ? (
-            <div className="welcome">
-              <h1>{client.isStatic ? 'This page carries no diff' : 'Waiting for a diff'}</h1>
-              <p>Pipe one in — sa adds it to this page:</p>
-              <pre>
-                <code>
-                  git diff | sa{group === 'default' ? '' : ` --target ${group}`}
-                  {'\n'}diff -u old.md new.md | sa{group === 'default' ? '' : ` --target ${group}`}
-                </code>
-              </pre>
-              <p className="hint">
-                Comments you leave here are readable from the command line with{' '}
-                <code>sa comments{group === 'default' ? '' : ` -t ${group}`}</code>.
-              </p>
-            </div>
+            <main className="content">{welcome}</main>
+          ) : pane === 'files' ? (
+            sidebar
           ) : (
-            <SplitPane
-              ratio={splitRatio}
-              onRatioChange={setSplitRatio}
-              left={
-                selectedDiff && selectedFile ? (
-                  <DiffView
-                    group={group}
-                    diff={selectedDiff}
-                    file={selectedFile}
-                    comments={fileComments}
-                    onChanged={() => void reload()}
-                  />
-                ) : (
-                  <p className="empty">Select a file.</p>
-                )
-              }
-              right={
-                <PreviewPane
-                  group={group}
-                  diffId={selectedDiff?.id ?? null}
-                  file={selectedFile}
-                  status={status}
-                />
-              }
-            />
+            <main className="content">{pane === 'preview' ? previewPane : diffPane}</main>
           )}
-        </main>
-      </div>
+        </div>
+      ) : (
+        <div className="body" ref={bodyRef}>
+          {sidebar}
+          <Divider
+            label="Resize the file list"
+            onDrag={resizeSidebar}
+            onReset={toggleSidebar}
+            onNudge={(direction) =>
+              setSidebarWidth((w) => Math.min(SIDEBAR_MAX, Math.max(0, w + direction * SIDEBAR_STEP)))
+            }
+          />
+          <main className="content">
+            {diffs.length === 0 ? (
+              welcome
+            ) : (
+              <SplitPane
+                ratio={splitRatio}
+                onRatioChange={setSplitRatio}
+                left={diffPane}
+                right={previewPane}
+              />
+            )}
+          </main>
+        </div>
+      )}
     </div>
   )
 }

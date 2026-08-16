@@ -10,6 +10,8 @@ interface Props {
   diff: Diff
   file: FileDiff
   comments: Comment[]
+  /** narrow is set on a phone, where side by side does not fit. */
+  narrow?: boolean
   onChanged: () => void
 }
 
@@ -45,10 +47,11 @@ function marker(kind: Line['kind']): string {
   }
 }
 
-export function DiffView({ group, diff, file, comments, onChanged }: Props) {
+export function DiffView({ group, diff, file, comments, narrow = false, onChanged }: Props) {
   // A new or deleted file has only one side, so side by side makes no sense
-  // for it and the toggle stays locked on unified.
-  const locked = file.status === 'added' || file.status === 'deleted' || file.isBinary
+  // for it and the toggle stays locked on unified. A narrow screen has no
+  // room for two columns either.
+  const locked = narrow || file.status === 'added' || file.status === 'deleted' || file.isBinary
   const [viewMode, setViewMode] = useState<ViewMode>(file.viewMode)
   const [selection, setSelection] = useState<Selection | null>(null)
   const mode: ViewMode = locked ? 'unified' : viewMode
@@ -130,7 +133,14 @@ export function DiffView({ group, diff, file, comments, onChanged }: Props) {
         </div>
         <div className="diff-tools">
           {locked ? (
-            <span className="hint" title="A file without an old side is always shown unified">
+            <span
+              className="hint"
+              title={
+                narrow
+                  ? 'Side by side needs a wider window'
+                  : 'A file without an old side is always shown unified'
+              }
+            >
               unified
             </span>
           ) : (

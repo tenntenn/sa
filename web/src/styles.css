@@ -807,3 +807,114 @@ a {
   border-left: 3px solid var(--border);
   background: var(--bg-soft);
 }
+
+/* ---------- phones ---------- */
+
+/* The tab bar replaces the pane switches when the panes are shown one at a
+   time. */
+.tabs {
+  display: flex;
+  flex: none;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-soft);
+}
+
+.tabs button {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: none;
+  border-radius: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--fg-muted);
+  padding: 10px 4px;
+  font-size: 13px;
+}
+
+.tabs button.active {
+  color: var(--fg);
+  border-bottom-color: var(--accent);
+}
+
+.tab-count {
+  font-size: 11px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--bg-inset);
+  color: var(--fg-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.sidebar.fill {
+  width: 100%;
+  border-right: none;
+}
+
+@media (max-width: 720px) {
+  .topbar {
+    flex-wrap: wrap;
+    row-gap: 6px;
+    padding: 8px 10px;
+  }
+
+  /* The counts and the export stamp are context, not controls: they give up
+     their room first. */
+  .topbar .counts {
+    order: 3;
+    flex-basis: 100%;
+  }
+
+  .exported-at {
+    display: none;
+  }
+
+  .app.narrow .content,
+  .app.narrow .sidebar {
+    /* One pane at a time, and it owns the screen. */
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+  }
+
+  .diff-header,
+  .preview-header {
+    padding: 6px;
+    gap: 6px;
+  }
+
+  /* A comment sits under the line it belongs to; on a phone the gutter it
+     used to be indented by is most of the screen. */
+  .thread,
+  .comment-form {
+    margin-left: 8px;
+  }
+
+  .diff-table {
+    font-size: 12px;
+  }
+
+  .diff-table col.col-num {
+    width: 34px;
+  }
+
+  .diff-table td {
+    padding: 0 4px;
+  }
+
+  .welcome {
+    padding: 20px 16px;
+  }
+
+  .markdown {
+    padding: 12px 14px 32px;
+  }
+
+  /* Touch targets: a line number is how a comment is started. */
+  .diff-table .num.clickable,
+  .file-item {
+    min-height: 28px;
+  }
+}
