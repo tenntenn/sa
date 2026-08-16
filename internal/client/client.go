@@ -10,9 +10,11 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/tenntenn/sa/internal/history"
 	"github.com/tenntenn/sa/internal/model"
 	"github.com/tenntenn/sa/internal/server"
 )
@@ -150,6 +152,29 @@ func (c *Client) DeleteAllGroups(ctx context.Context) (int, error) {
 		return 0, err
 	}
 	return res.Removed, nil
+}
+
+// Reviews returns the reviews the server has recorded.
+func (c *Client) Reviews(ctx context.Context, filter history.Filter) ([]history.Record, error) {
+	q := url.Values{}
+	if filter.Group != "" {
+		q.Set("group", filter.Group)
+	}
+	if !filter.Since.IsZero() {
+		q.Set("since", filter.Since.Format(time.RFC3339))
+	}
+	if filter.Limit > 0 {
+		q.Set("limit", strconv.Itoa(filter.Limit))
+	}
+	u := c.url("/_/api/reviews")
+	if len(q) > 0 {
+		u += "?" + q.Encode()
+	}
+	var res server.ReviewsResponse
+	if err := c.do(ctx, http.MethodGet, u, nil, &res); err != nil {
+		return nil, err
+	}
+	return res.Reviews, nil
 }
 
 // Shutdown asks the server to stop.

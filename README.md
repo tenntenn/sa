@@ -190,6 +190,47 @@ $ sa comments -t api             # comments of the "api" group
 $ sa comments --clear            # start the next review round
 ```
 
+## Looking back at reviews
+
+Every submitted review is written down, so the rounds do not vanish with the
+groups they belonged to:
+
+```console
+$ sa reviews                     # one line each, newest last
+$ sa reviews --since 7d          # this week
+$ sa reviews -t api --limit 5
+$ sa reviews --stats             # what they say together
+$ sa reviews --format json       # every comment, for your own analysis
+```
+
+```
+2026-08-16 03:26  default    2 comment(s), 1 suggestion(s)  3 file(s), +11 -1  waited 42m
+      だいたいOK
+2026-08-16 11:02  api        1 comment(s)  3 file(s), +11 -1  waited 3h10m
+
+2 review(s), 3 comment(s) (1.5 per review), 1 suggestion(s)
+median wait from diff to review: 1h24m
+most commented:
+  internal/server/server.go                7
+  README.md                                5
+by kind of file:
+  .go                                     22
+  .md                                      9
+by author:
+  reviewer                                31
+  claude                                   8
+```
+
+The log is one JSON object per line at `$XDG_STATE_HOME/sa/reviews.jsonl`,
+so `jq` works on it directly and nothing about it is sa-shaped:
+
+```console
+$ jq -r '.comments[].path' ~/.local/state/sa/reviews.jsonl | sort | uniq -c | sort -rn
+$ jq 'select(.group == "api") | .comments[].body' ~/.local/state/sa/reviews.jsonl
+```
+
+It stays on the machine that recorded it. Delete the file to forget the lot.
+
 ## Exporting a review
 
 `sa export` writes the whole review as one self-contained HTML page: the same

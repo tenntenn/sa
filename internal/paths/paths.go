@@ -48,6 +48,17 @@ func SessionFile(port int) (string, error) {
 	return filepath.Join(dir, fmt.Sprintf("session-%d.json", port)), nil
 }
 
+// HistoryFile returns the log of submitted reviews. It is one file for the
+// whole machine on purpose: the point of keeping reviews is to read them
+// together, long after the servers that recorded them are gone.
+func HistoryFile() (string, error) {
+	dir, err := StateDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, "reviews.jsonl"), nil
+}
+
 // CacheDir returns the directory for files sa generates, such as the
 // Markdown reconstructed from a diff and handed to mo.
 func CacheDir() (string, error) {

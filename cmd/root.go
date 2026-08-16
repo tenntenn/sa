@@ -106,6 +106,13 @@ Waiting for the review:
   $ sa wait                       # blocks until "Submit review" is pressed
   $ git diff | sa --on-review 'claude -p "$(sa comments)"'
 
+Looking back:
+  Every submitted review is written down, so a year of them can be read as
+  one thing rather than thrown away a round at a time.
+
+  $ sa reviews --since 7d          # what was reviewed this week
+  $ sa reviews --stats             # which files draw comments, and how many
+
 Exporting:
   sa export writes the review as one self-contained HTML page that needs no
   server, which is how a review travels to someone who does not run sa.
@@ -161,7 +168,7 @@ func init() {
 	f.StringVar(&onReviewURL, "on-review-url", "",
 		"URL the server POSTs to when the review of this group is submitted")
 
-	rootCmd.AddCommand(commentCmd, commentsCmd, exportCmd, hookCmd, skillCmd, waitCmd)
+	rootCmd.AddCommand(commentCmd, commentsCmd, exportCmd, hookCmd, reviewsCmd, skillCmd, waitCmd)
 }
 
 func addr() string {

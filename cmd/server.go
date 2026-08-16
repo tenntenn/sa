@@ -28,11 +28,16 @@ func runServer(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	historyFile, err := paths.HistoryFile()
+	if err != nil {
+		return err
+	}
 	srv, err := server.New(server.Options{
 		Bind:        bind,
 		Port:        port,
 		SessionFile: sessionFile,
 		CacheDir:    cacheDir,
+		HistoryFile: historyFile,
 		Mo:          moRunner(),
 		Version:     version.Version,
 		Revision:    version.Revision,

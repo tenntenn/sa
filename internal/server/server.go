@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/tenntenn/sa/internal/diff"
+	"github.com/tenntenn/sa/internal/history"
 	"github.com/tenntenn/sa/internal/mo"
 	"github.com/tenntenn/sa/internal/model"
 )
@@ -36,6 +37,8 @@ type Options struct {
 	Mo *mo.Runner
 	// CacheDir holds Markdown reconstructed from diffs.
 	CacheDir string
+	// HistoryFile is the log of submitted reviews. Empty keeps none.
+	HistoryFile string
 	// Version and Revision are reported by /_/api/status.
 	Version  string
 	Revision string
@@ -143,6 +146,7 @@ func (s *Server) handler() http.Handler {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /_/api/status", s.handleStatus)
+	mux.HandleFunc("GET /_/api/reviews", s.handleReviews)
 	mux.HandleFunc("GET /_/api/groups", s.handleGroups)
 	mux.HandleFunc("DELETE /_/api/groups", s.handleDeleteAllGroups)
 	mux.HandleFunc("GET /_/api/groups/{group}", s.handleGroup)
@@ -233,6 +237,44 @@ func (s *Server) status() Status {
 
 func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, s.status())
+}
+
+// ReviewsResponse is the payload of GET /_/api/reviews.
+type ReviewsResponse struct {
+	Reviews []history.Record `json:"reviews"`
+	Stats   history.Stats    `json:"stats"`
+}
+
+// handleReviews serves the reviews that were submitted, so that a pile of
+// them can be read together.
+func (s *Server) handleReviews(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	filter := history.Filter{Group: q.Get("group")}
+	if since := q.Get("since"); since != "" {
+		t, err := history.ParseSince(since, time.Now())
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		filter.Since = t
+	}
+	if limit := q.Get("limit"); limit != "" {
+		n, err := strconv.Atoi(limit)
+		if err != nil || n < 0 {
+			http.Error(w, "limit must be a number", http.StatusBadRequest)
+			return
+		}
+		filter.Limit = n
+	}
+	records, err := history.Load(s.opts.HistoryFile, filter)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if records == nil {
+		records = []history.Record{}
+	}
+	writeJSON(w, http.StatusOK, ReviewsResponse{Reviews: records, Stats: history.Summarize(records)})
 }
 
 func (s *Server) handleGroups(w http.ResponseWriter, r *http.Request) {
@@ -577,6 +619,11 @@ func (s *Server) handleSubmitReview(w http.ResponseWriter, r *http.Request) {
 	if !found {
 		http.Error(w, "no such group", http.StatusNotFound)
 		return
+	}
+	// A review is worth keeping past the round it belongs to: it is the
+	// only record of what this reviewer looks for.
+	if err := history.Append(s.opts.HistoryFile, history.FromGroup(g)); err != nil {
+		slog.Warn("could not record the review", "error", err)
 	}
 	s.notifyReview(g)
 	s.runHooks(g)

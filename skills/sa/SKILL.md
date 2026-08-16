@@ -204,6 +204,22 @@ written on it stay in that browser. Use `--fragment` when the page is
 embedded into something that brings its own `<html>` (for example an
 artifact).
 
+## Learning from past reviews
+
+Every submitted review is kept, which makes the reviewer's habits readable
+rather than guessed at:
+
+```
+sa reviews --stats                # which files draw comments, how many per review
+sa reviews --since 30d --format json   # every comment, to read properly
+```
+
+Worth doing before you hand over a change of the same shape: if the last ten
+reviews of this repository were mostly about error messages and test names,
+check yours before asking. Say what you found and what you changed because of
+it — a pattern you read out of the log is a claim about the human, so let
+them correct it.
+
 ## Command reference
 
 | Command | What it does |
@@ -224,6 +240,7 @@ artifact).
 | `sa wait [-t <name>]` | Block until the review is submitted, then print it |
 | `sa hook --on-review '<cmd>'` | Have the server run something when the review lands |
 | `sa hook [--clear]` | List or drop those hooks |
+| `sa reviews [--stats] [--since 7d]` | The reviews that were submitted, and what they say together |
 | `sa --shutdown` | Stop the server |
 | `... \| sa export <file>` | Write the review as one self-contained HTML page |
 | `... \| sa export --fragment <file>` | The same, body only, for embedding |
