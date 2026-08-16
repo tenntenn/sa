@@ -7,12 +7,12 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/tenntenn/sa/internal/client"
-	"github.com/tenntenn/sa/internal/diff"
-	"github.com/tenntenn/sa/internal/export"
-	"github.com/tenntenn/sa/internal/model"
-	"github.com/tenntenn/sa/version"
-	"github.com/tenntenn/sa/web"
+	"github.com/tenntenn/sbnn/internal/client"
+	"github.com/tenntenn/sbnn/internal/diff"
+	"github.com/tenntenn/sbnn/internal/export"
+	"github.com/tenntenn/sbnn/internal/model"
+	"github.com/tenntenn/sbnn/version"
+	"github.com/tenntenn/sbnn/web"
 )
 
 var (
@@ -25,17 +25,17 @@ var exportCmd = &cobra.Command{
 	Short: "Write a review as a single self-contained HTML page",
 	Long: `Write a review as one self-contained HTML page.
 
-The page carries the same UI as the sa server with the diff frozen into it:
+The page carries the same UI as the sbnn server with the diff frozen into it:
 no server, no mo, no network. Comments can still be written; they are kept in
-the browser and "Copy prompt" produces the same text as ` + "`sa comments`" + `.
+the browser and "Copy prompt" produces the same text as ` + "`sbnn comments`" + `.
 
-  $ git diff | sa export review.html    # straight from stdin, no server needed
-  $ sa export -t api review.html        # the "api" group of a running server
-  $ git diff | sa export                # to stdout
+  $ git diff | sbnn export review.html    # straight from stdin, no server needed
+  $ sbnn export -t api review.html        # the "api" group of a running server
+  $ git diff | sbnn export                # to stdout
 
   # body only, to embed in a page that brings its own <html> (an artifact,
   # a static site, a mail):
-  $ git diff | sa export --fragment review.body.html`,
+  $ git diff | sbnn export --fragment review.body.html`,
 	Args:         cobra.MaximumNArgs(1),
 	RunE:         runExport,
 	SilenceUsage: true,
@@ -43,9 +43,9 @@ the browser and "Copy prompt" produces the same text as ` + "`sa comments`" + `.
 
 func init() {
 	f := exportCmd.Flags()
-	f.StringVarP(&target, "target", "t", "", "Group name (default \"default\", or $SA_TARGET)")
-	f.IntVarP(&port, "port", "p", DefaultPort, "Port of the sa server to read the group from")
-	f.StringVarP(&bind, "bind", "b", "localhost", "Bind address of the sa server")
+	f.StringVarP(&target, "target", "t", "", "Group name (default \"default\", or $SBNN_TARGET)")
+	f.IntVarP(&port, "port", "p", DefaultPort, "Port of the sbnn server to read the group from")
+	f.StringVarP(&bind, "bind", "b", "localhost", "Bind address of the sbnn server")
 	f.StringVar(&title, "title", "", "Title of the diff read from stdin")
 	f.StringVar(&exportTitle, "page-title", "", "Title of the generated page")
 	f.BoolVar(&exportFragment, "fragment", false, "Write only the page body, for embedding")
@@ -90,7 +90,7 @@ func runExport(cmd *cobra.Command, args []string) error {
 	default:
 		c := client.New(addr(), 10*time.Second)
 		if _, err := c.Status(ctx); err != nil {
-			return fmt.Errorf("no diff on stdin and no sa server on %s", c.Addr)
+			return fmt.Errorf("no diff on stdin and no sbnn server on %s", c.Addr)
 		}
 		g, err = c.Group(ctx, group)
 		if err != nil {
@@ -121,7 +121,7 @@ func runExport(cmd *cobra.Command, args []string) error {
 	for _, d := range g.Diffs {
 		files += len(d.Files)
 	}
-	fmt.Fprintf(os.Stderr, "sa: wrote %s (%d file(s), %d preview(s), %d KiB)\n",
+	fmt.Fprintf(os.Stderr, "sbnn: wrote %s (%d file(s), %d preview(s), %d KiB)\n",
 		args[0], files, len(payload.Previews), len(page)/1024)
 	return nil
 }

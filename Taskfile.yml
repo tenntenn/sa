@@ -6,7 +6,7 @@ vars:
 
 tasks:
   build:
-    desc: Builds the review UI and the sa binary.
+    desc: Builds the review UI and the sbnn binary.
     deps: [web, bin]
 
   web:
@@ -35,7 +35,7 @@ tasks:
       - "gofmt -l . | grep -v '^web/node_modules' && exit 1 || true"
 
   dev:
-    desc: Runs the sa server in the foreground and the Vite dev server, which proxies /_ to it.
+    desc: Runs the sbnn server in the foreground and the Vite dev server, which proxies /_ to it.
     deps: [dev-server, dev-web]
 
   dev-server:

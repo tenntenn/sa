@@ -7,7 +7,7 @@ import { readSetting, writeSetting } from '../storage'
 /** Layout is how the rounds are shown: stacked, or one tab at a time. */
 type Layout = 'list' | 'tabs'
 
-const LAYOUT_KEY = 'sa.sidebar.layout'
+const LAYOUT_KEY = 'sbnn.sidebar.layout'
 
 /**
  * matchesPath reports whether a path answers a search.

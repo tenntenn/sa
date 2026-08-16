@@ -10,11 +10,11 @@ import (
 	"time"
 )
 
-// moProxy publishes the mo server through a loopback-only origin owned by sa.
+// moProxy publishes the mo server through a loopback-only origin owned by sbnn.
 //
 // mo answers every request with "frame-ancestors 'none'", which forbids any
-// page from framing it. sa needs the preview next to the diff in the same
-// window, so the proxy relaxes exactly that directive to sa's own origin and
+// page from framing it. sbnn needs the preview next to the diff in the same
+// window, so the proxy relaxes exactly that directive to sbnn's own origin and
 // forwards everything else untouched.
 type moProxy struct {
 	ln      net.Listener

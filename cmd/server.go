@@ -11,13 +11,13 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/tenntenn/sa/internal/client"
-	"github.com/tenntenn/sa/internal/paths"
-	"github.com/tenntenn/sa/internal/server"
-	"github.com/tenntenn/sa/version"
+	"github.com/tenntenn/sbnn/internal/client"
+	"github.com/tenntenn/sbnn/internal/paths"
+	"github.com/tenntenn/sbnn/internal/server"
+	"github.com/tenntenn/sbnn/version"
 )
 
-// runServer runs the sa server in the foreground. The background server is
+// runServer runs the sbnn server in the foreground. The background server is
 // this same code, started by spawnServer with --foreground.
 func runServer(ctx context.Context) error {
 	sessionFile, err := paths.SessionFile(port)
@@ -49,7 +49,7 @@ func runServer(ctx context.Context) error {
 	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	fmt.Fprintf(os.Stderr, "sa: serving at %s (pid %d)\n", srv.BaseURL(), os.Getpid())
+	fmt.Fprintf(os.Stderr, "sbnn: serving at %s (pid %d)\n", srv.BaseURL(), os.Getpid())
 	return srv.Run(ctx)
 }
 
@@ -57,7 +57,7 @@ func runServer(ctx context.Context) error {
 func spawnServer(ctx context.Context, c *client.Client) (*server.Status, error) {
 	bin, err := os.Executable()
 	if err != nil {
-		return nil, fmt.Errorf("cannot find the sa binary: %w", err)
+		return nil, fmt.Errorf("cannot find the sbnn binary: %w", err)
 	}
 	args := []string{
 		"--foreground",
@@ -88,7 +88,7 @@ func spawnServer(ctx context.Context, c *client.Client) (*server.Status, error) 
 	}
 	setSysProcAttr(cmd)
 	if err := cmd.Start(); err != nil {
-		return nil, fmt.Errorf("cannot start the sa server: %w", err)
+		return nil, fmt.Errorf("cannot start the sbnn server: %w", err)
 	}
 	pid := cmd.Process.Pid
 	// Detach: the server outlives the invocation that started it.
@@ -103,7 +103,7 @@ func spawnServer(ctx context.Context, c *client.Client) (*server.Status, error) 
 		}
 		return nil, err
 	}
-	fmt.Fprintf(os.Stderr, "sa: serving at %s (pid %d)\n", st.URL, st.PID)
+	fmt.Fprintf(os.Stderr, "sbnn: serving at %s (pid %d)\n", st.URL, st.PID)
 	return st, nil
 }
 
@@ -119,7 +119,7 @@ func waitForReady(ctx context.Context, c *client.Client, timeout time.Duration) 
 		case <-time.After(100 * time.Millisecond):
 		}
 	}
-	return nil, fmt.Errorf("the sa server on %s did not become ready", c.Addr)
+	return nil, fmt.Errorf("the sbnn server on %s did not become ready", c.Addr)
 }
 
 // openLog returns the log file of the background server. Failing to open it

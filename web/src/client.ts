@@ -34,11 +34,11 @@ export interface GroupData {
 }
 
 /**
- * SaClient is what the UI talks to. The live client uses the sa server; the
- * static one is used by pages written with `sa export`, which have no server
+ * SbnnClient is what the UI talks to. The live client uses the sbnn server; the
+ * static one is used by pages written with `sbnn export`, which have no server
  * behind them and keep comments in the browser.
  */
-export interface SaClient {
+export interface SbnnClient {
   readonly isStatic: boolean
   /** exportedAt is set on static pages and tells when the diff was frozen. */
   readonly exportedAt?: string
@@ -61,7 +61,7 @@ export interface SaClient {
   subscribe(group: string, onChange: () => void): () => void
 }
 
-/** StaticPayload is the data `sa export` embeds into the page. */
+/** StaticPayload is the data `sbnn export` embeds into the page. */
 export interface StaticPayload {
   version: number
   saVersion?: string
@@ -74,11 +74,11 @@ export interface StaticPayload {
 
 declare global {
   interface Window {
-    __SA_DATA__?: StaticPayload
+    __SBNN_DATA__?: StaticPayload
   }
 }
 
-function createLiveClient(): SaClient {
+function createLiveClient(): SbnnClient {
   return {
     isStatic: false,
     async load(group) {
@@ -137,8 +137,8 @@ function createLiveClient(): SaClient {
   }
 }
 
-function createStaticClient(data: StaticPayload): SaClient {
-  const storageKey = `sa:comments:${data.group}:${data.generatedAt}`
+function createStaticClient(data: StaticPayload): SbnnClient {
+  const storageKey = `sbnn:comments:${data.group}:${data.generatedAt}`
   const listeners = new Set<() => void>()
 
   const read = (): Comment[] => {
@@ -244,8 +244,8 @@ function createStaticClient(data: StaticPayload): SaClient {
   }
 }
 
-export const client: SaClient = window.__SA_DATA__
-  ? createStaticClient(window.__SA_DATA__)
+export const client: SbnnClient = window.__SBNN_DATA__
+  ? createStaticClient(window.__SBNN_DATA__)
   : createLiveClient()
 
 export type { NewComment } from './api'

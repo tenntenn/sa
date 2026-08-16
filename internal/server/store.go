@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/tenntenn/sa/internal/model"
+	"github.com/tenntenn/sbnn/internal/model"
 )
 
 // DefaultGroup is the group diffs land in when no --target is given. It is
@@ -53,7 +53,7 @@ type persisted struct {
 const persistVersion = 1
 
 // Load restores the session from disk. A missing or unreadable file is not an
-// error: sa simply starts with an empty session.
+// error: sbnn simply starts with an empty session.
 func (s *Store) Load() error {
 	if s.path == "" {
 		return nil
@@ -324,7 +324,7 @@ func (s *Store) AddHook(group string, h *model.Hook) (*model.Hook, error) {
 	defer s.mu.Unlock()
 	g := s.group(group, true)
 	for _, existing := range g.Hooks {
-		// Re-registering the same thing (a second `sa --on-review ...` for
+		// Re-registering the same thing (a second `sbnn --on-review ...` for
 		// the same group) should not pile up duplicates.
 		if existing.Command == h.Command && existing.URL == h.URL {
 			return clone(existing), nil

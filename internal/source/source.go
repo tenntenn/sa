@@ -10,8 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/tenntenn/sa/internal/diff"
-	"github.com/tenntenn/sa/internal/model"
+	"github.com/tenntenn/sbnn/internal/diff"
+	"github.com/tenntenn/sbnn/internal/model"
 )
 
 // Kind tells where the content came from.
@@ -52,7 +52,7 @@ func NewSide(baseDir string, f *model.File) Result {
 // AbsPath resolves a diff path against the directory the diff was sent
 // from, and returns "" for anything that lands outside it.
 //
-// The paths come out of the diff text, which sa did not write and does not
+// The paths come out of the diff text, which sbnn did not write and does not
 // vouch for: a patch someone mailed over can name ../../.ssh/id_rsa as
 // happily as it names a file of the project. What is read from disk here is
 // shown in the preview and baked into an exported page, so a path that

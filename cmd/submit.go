@@ -7,8 +7,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/tenntenn/sa/internal/client"
-	"github.com/tenntenn/sa/internal/model"
+	"github.com/tenntenn/sbnn/internal/client"
+	"github.com/tenntenn/sbnn/internal/model"
 )
 
 var (
@@ -30,21 +30,21 @@ anything waiting on it, starts the hooks, and writes the round into the log
 of past reviews. This does the same thing without a browser, which is what a
 reviewer who is not a person needs.
 
-  $ git diff | sa --target api                    # the change to look at
-  $ sa comment main.go:42 -m "..." --author me    # what you found
-  $ sa submit --target api --note "one thing to fix"
+  $ git diff | sbnn --target api                    # the change to look at
+  $ sbnn comment main.go:42 -m "..." --author me    # what you found
+  $ sbnn submit --target api --note "one thing to fix"
 
 Say what you decided about the change as a whole, the way a review on a
 pull request does. Counting comments does not answer it: a change can be
 approved with three remarks on it, and can be sent back without a single
 line being pointed at.
 
-  $ sa submit --approve                     # go ahead
-  $ sa submit                               # commented: said things, did not decide
-  $ sa submit --request-changes -m "..."    # not as it is
+  $ sbnn submit --approve                     # go ahead
+  $ sbnn submit                               # commented: said things, did not decide
+  $ sbnn submit --request-changes -m "..."    # not as it is
 
 A review with nothing in it is a review: submitting after finding nothing is
-how the other side learns that, and it is the answer sa wait was waiting
+how the other side learns that, and it is the answer sbnn wait was waiting
 for.
 
 --exit-code turns the verdict into a status, so a pipeline can act on it
@@ -59,7 +59,7 @@ something open to address.`,
 
 func init() {
 	f := submitCmd.Flags()
-	f.StringVarP(&target, "target", "t", "", "Group name (default \"default\", or $SA_TARGET)")
+	f.StringVarP(&target, "target", "t", "", "Group name (default \"default\", or $SBNN_TARGET)")
 	f.IntVarP(&port, "port", "p", DefaultPort, "Server port")
 	f.StringVarP(&bind, "bind", "b", "localhost", "Bind address")
 	f.StringVarP(&submitNote, "note", "m", "", "What the review says as a whole")
@@ -86,7 +86,7 @@ func runSubmit(cmd *cobra.Command, _ []string) error {
 	}
 	c := client.New(addr(), 10*time.Second)
 	if _, err := c.Status(ctx); err != nil {
-		return fmt.Errorf("no sa server found on %s", c.Addr)
+		return fmt.Errorf("no sbnn server found on %s", c.Addr)
 	}
 
 	g, err := c.SubmitReview(ctx, group, submitNote, verdict)
@@ -107,7 +107,7 @@ func runSubmit(cmd *cobra.Command, _ []string) error {
 			return err
 		}
 	default:
-		fmt.Fprintf(os.Stderr, "sa: %s %q, %d open comment(s)\n", g.ReviewVerdict.String(), group, open)
+		fmt.Fprintf(os.Stderr, "sbnn: %s %q, %d open comment(s)\n", g.ReviewVerdict.String(), group, open)
 	}
 	if submitQuiet || submitExitCode {
 		return exitWithVerdict(g.ReviewVerdict, g.Comments)

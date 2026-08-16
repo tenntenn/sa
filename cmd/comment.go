@@ -12,9 +12,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/tenntenn/sa/internal/client"
-	"github.com/tenntenn/sa/internal/model"
-	"github.com/tenntenn/sa/internal/server"
+	"github.com/tenntenn/sbnn/internal/client"
+	"github.com/tenntenn/sbnn/internal/model"
+	"github.com/tenntenn/sbnn/internal/server"
 )
 
 var (
@@ -36,29 +36,29 @@ const DefaultAuthor = "agent"
 var commentCmd = &cobra.Command{
 	Use:   "comment [path:line[-line]]",
 	Short: "Leave a review comment from the command line",
-	Long: `Leave a review comment on a diff that was already sent to sa.
+	Long: `Leave a review comment on a diff that was already sent to sbnn.
 
 This is the other direction of the review loop: an agent can point at the
 lines it is unsure about, ask a question, or propose a change, and the human
 sees it in the browser next to the diff.
 
-  $ sa comment internal/server/server.go:120 -m "Should this be a 404?"
-  $ sa comment README.md:12-18 -m "Reworded" --suggest "$(cat new.md)"
-  $ cat new.txt | sa comment main.go:42 -m "Simpler" --suggest -
-  $ sa comment --author claude cmd/root.go:88 -m "Left over from the old flag"
-  $ sa comment --question main.go:42 -m "Is a 404 right here, or a 409?"
+  $ sbnn comment internal/server/server.go:120 -m "Should this be a 404?"
+  $ sbnn comment README.md:12-18 -m "Reworded" --suggest "$(cat new.md)"
+  $ cat new.txt | sbnn comment main.go:42 -m "Simpler" --suggest -
+  $ sbnn comment --author claude cmd/root.go:88 -m "Left over from the old flag"
+  $ sbnn comment --question main.go:42 -m "Is a 404 right here, or a 409?"
 
 The line numbers are the ones of the new side of the diff, the same ones the
 diff shows; --side old comments on a removed line instead. The file is looked
 up in the newest diff of the group that carries that path, unless --diff
-names one. sa fills in the reviewed code itself.
+names one. sbnn fills in the reviewed code itself.
 
 A suggestion is a fenced block inside the comment, the way GitHub writes one,
 so it can also be typed straight into -m.
 
 Many at once, for a whole self review:
 
-  $ sa comment --json <<'EOF'
+  $ sbnn comment --json <<'EOF'
   [
     {"path": "cmd/root.go", "line": "88", "body": "left over"},
     {"path": "README.md", "line": "12-18", "body": "reworded", "suggestion": "..."}
@@ -66,7 +66,7 @@ Many at once, for a whole self review:
   EOF
 
 Comments made this way are read back exactly like the ones written in the
-browser, with ` + "`sa comments`" + `.`,
+browser, with ` + "`sbnn comments`" + `.`,
 	Args:         cobra.MaximumNArgs(1),
 	RunE:         runComment,
 	SilenceUsage: true,
@@ -74,7 +74,7 @@ browser, with ` + "`sa comments`" + `.`,
 
 func init() {
 	f := commentCmd.Flags()
-	f.StringVarP(&target, "target", "t", "", "Group name (default \"default\", or $SA_TARGET)")
+	f.StringVarP(&target, "target", "t", "", "Group name (default \"default\", or $SBNN_TARGET)")
 	f.IntVarP(&port, "port", "p", DefaultPort, "Server port")
 	f.StringVarP(&bind, "bind", "b", "localhost", "Bind address")
 	f.StringVarP(&commentBody, "message", "m", "", "Comment body")
@@ -98,7 +98,7 @@ func runComment(cmd *cobra.Command, args []string) error {
 	}
 	c := client.New(addr(), 10*time.Second)
 	if _, err := c.Status(ctx); err != nil {
-		return fmt.Errorf("no sa server found on %s", c.Addr)
+		return fmt.Errorf("no sbnn server found on %s", c.Addr)
 	}
 
 	var requests []server.AddCommentRequest
@@ -128,7 +128,7 @@ func runComment(cmd *cobra.Command, args []string) error {
 		}
 		stored = append(stored, added)
 		if !commentJSONOut {
-			fmt.Fprintf(os.Stderr, "sa: %s on %s%s\n", added.ID, added.Path, lineRangeOf(added))
+			fmt.Fprintf(os.Stderr, "sbnn: %s on %s%s\n", added.ID, added.Path, lineRangeOf(added))
 		}
 	}
 	if commentJSONOut {

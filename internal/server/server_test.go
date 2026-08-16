@@ -14,9 +14,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tenntenn/sa/internal/history"
-	"github.com/tenntenn/sa/internal/mo"
-	"github.com/tenntenn/sa/internal/model"
+	"github.com/tenntenn/sbnn/internal/history"
+	"github.com/tenntenn/sbnn/internal/mo"
+	"github.com/tenntenn/sbnn/internal/model"
 )
 
 const sampleDiff = `diff --git a/README.md b/README.md
@@ -24,7 +24,7 @@ index 1111111..2222222 100644
 --- a/README.md
 +++ b/README.md
 @@ -1,2 +1,3 @@
- # sa
+ # sbnn
 -old line
 +new line
 +another line
@@ -280,7 +280,7 @@ func TestPreviewUsesMo(t *testing.T) {
 	script := `#!/bin/sh
 echo "$@" > ` + filepath.Join(dir, "args") + `
 path=$(eval echo \${$#})
-printf '{"url":"http://localhost:6275","files":[{"url":"http://localhost:6275/sa-default?file=abc","name":"new.md","path":"%s"}]}\n' "$path"
+printf '{"url":"http://localhost:6275","files":[{"url":"http://localhost:6275/sbnn-default?file=abc","name":"new.md","path":"%s"}]}\n' "$path"
 `
 	if err := os.WriteFile(stub, []byte(script), 0o700); err != nil {
 		t.Fatal(err)
@@ -303,7 +303,7 @@ printf '{"url":"http://localhost:6275","files":[{"url":"http://localhost:6275/sa
 	if preview.Source != SourceReconstructed || !preview.Complete {
 		t.Errorf("preview = %+v, want a complete reconstruction of a new file", preview)
 	}
-	if preview.MoURL != "http://localhost:6275/sa-default?file=abc" {
+	if preview.MoURL != "http://localhost:6275/sbnn-default?file=abc" {
 		t.Errorf("moUrl = %q", preview.MoURL)
 	}
 	content, err := os.ReadFile(preview.Path)
@@ -317,8 +317,8 @@ printf '{"url":"http://localhost:6275","files":[{"url":"http://localhost:6275/sa
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(args), "--target sa-default") {
-		t.Errorf("mo args = %q, want sa's own mo group", args)
+	if !strings.Contains(string(args), "--target sbnn-default") {
+		t.Errorf("mo args = %q, want sbnn's own mo group", args)
 	}
 }
 
@@ -534,7 +534,7 @@ func TestCommentByPathResolvesFileAndSnippet(t *testing.T) {
 	ts, _ := newTestServer(t)
 	postJSON(t, ts.URL+"/_/api/groups/default/diffs", AddDiffRequest{Content: sampleDiff}, nil)
 
-	// An agent knows the path and the line, not sa's internal IDs.
+	// An agent knows the path and the line, not sbnn's internal IDs.
 	var comment model.Comment
 	resp := postJSON(t, ts.URL+"/_/api/groups/default/comments", AddCommentRequest{
 		Path:      "README.md",
@@ -779,13 +779,13 @@ func TestClosingEveryReview(t *testing.T) {
 	}
 }
 
-// sa listens on loopback without authentication, so any page the user has
-// open can reach it. A hook is a shell command sa runs, which makes a POST
+// sbnn listens on loopback without authentication, so any page the user has
+// open can reach it. A hook is a shell command sbnn runs, which makes a POST
 // from another site code execution; the guard is what stands between the
 // two, and reads have to keep working for the CLI.
 func TestCrossOriginRequestsAreRefused(t *testing.T) {
 	ts, srv := newTestServer(t)
-	// The guard compares ports with the one sa was configured with, which
+	// The guard compares ports with the one sbnn was configured with, which
 	// httptest picks for us.
 	u, err := url.Parse(ts.URL)
 	if err != nil {
@@ -815,9 +815,9 @@ func TestCrossOriginRequestsAreRefused(t *testing.T) {
 			map[string]string{"Origin": "null"}, http.StatusForbidden},
 		{"shutting the server down from another site", http.MethodPost, ts.URL + "/_/api/shutdown",
 			map[string]string{"Origin": "https://evil.example"}, http.StatusForbidden},
-		{"sa's own page", http.MethodPost, hooks,
+		{"sbnn's own page", http.MethodPost, hooks,
 			map[string]string{"Origin": ts.URL, "Sec-Fetch-Site": "same-origin"}, http.StatusOK},
-		{"sa's own page under another loopback name", http.MethodPost, hooks,
+		{"sbnn's own page under another loopback name", http.MethodPost, hooks,
 			map[string]string{"Origin": "http://127.0.0.1:" + u.Port()}, http.StatusOK},
 		{"the command line, which names no origin", http.MethodPost, hooks, nil, http.StatusOK},
 		{"reading, which CORS already guards", http.MethodGet, ts.URL + "/_/api/status",
@@ -848,7 +848,7 @@ func TestCrossOriginRequestsAreRefused(t *testing.T) {
 
 // A review submitted over the API is a review like any other: it wakes what
 // is waiting, and it is written into the log. That is what lets a reviewer
-// who is not a person - `sa submit` - end a round.
+// who is not a person - `sbnn submit` - end a round.
 func TestSubmitReviewWithoutABrowser(t *testing.T) {
 	logFile := filepath.Join(t.TempDir(), "reviews.jsonl")
 	ts, _ := newTestServer(t, func(o *Options) { o.HistoryFile = logFile })

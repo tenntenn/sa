@@ -9,23 +9,23 @@ import (
 
 	"github.com/pkg/browser"
 
-	"github.com/tenntenn/sa/internal/model"
-	"github.com/tenntenn/sa/internal/paths"
-	"github.com/tenntenn/sa/internal/server"
+	"github.com/tenntenn/sbnn/internal/model"
+	"github.com/tenntenn/sbnn/internal/paths"
+	"github.com/tenntenn/sbnn/internal/server"
 )
 
 // TargetEnv names the group to work on when --target is not given. It is
-// there for whoever is driving sa - a shell, a script, an agent working in
+// there for whoever is driving sbnn - a shell, a script, an agent working in
 // two checkouts at once - to say which review is theirs, once, instead of
-// repeating the flag. sa itself has no idea what the name stands for.
-const TargetEnv = "SA_TARGET"
+// repeating the flag. sbnn itself has no idea what the name stands for.
+const TargetEnv = "SBNN_TARGET"
 
 // HistoryEnv points the log of submitted reviews somewhere else. "off"
 // keeps no log at all.
-const HistoryEnv = "SA_HISTORY"
+const HistoryEnv = "SBNN_HISTORY"
 
 // historyFile resolves where the reviews are written down: --history-file,
-// then $SA_HISTORY, then the state directory. It is a plain path on purpose:
+// then $SBNN_HISTORY, then the state directory. It is a plain path on purpose:
 // a project that wants its reviews under version control points it into the
 // repository and commits the file.
 func historyFile(flag string) (string, error) {
@@ -43,7 +43,7 @@ func historyFile(flag string) (string, error) {
 }
 
 // groupName resolves the group a command works on: --target, then
-// $SA_TARGET, then the default group.
+// $SBNN_TARGET, then the default group.
 func groupName(flag string) (string, error) {
 	if flag == "" {
 		flag = os.Getenv(TargetEnv)
@@ -66,7 +66,7 @@ func browserOpen(url string) error {
 	return browser.OpenURL(url)
 }
 
-// isTerminal reports whether a stream is attached to a terminal. sa is meant
+// isTerminal reports whether a stream is attached to a terminal. sbnn is meant
 // to sit in a pipeline as much as in a shell, and a pipeline has nobody to
 // open a browser for.
 func isTerminal(f *os.File) bool {

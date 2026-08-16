@@ -1,6 +1,6 @@
-// Package skills embeds the agent skill shipped with sa.
+// Package skills embeds the agent skill shipped with sbnn.
 //
-// The skill is plain Markdown with YAML front matter and describes the sa
+// The skill is plain Markdown with YAML front matter and describes the sbnn
 // workflow in terms of its command line only, so it works with any coding
 // agent that can read a skill file: copy it wherever your agent looks for
 // skills, or point at it from AGENTS.md.
@@ -11,14 +11,14 @@ import (
 	"io/fs"
 )
 
-//go:embed all:sa
+//go:embed all:sbnn
 var files embed.FS
 
 // Name is the directory name of the skill.
-const Name = "sa"
+const Name = "sbnn"
 
 // FS returns the embedded skill tree, rooted at the directory holding the
-// skill (so paths look like "sa/SKILL.md").
+// skill (so paths look like "sbnn/SKILL.md").
 func FS() fs.FS { return files }
 
 // Markdown returns the content of SKILL.md.

@@ -2,8 +2,8 @@ import type { Comment, Diff } from './types'
 import { suggestions } from './suggestion'
 
 /**
- * buildPrompt renders review comments the same way the sa server does, so an
- * exported page produces the same text as `sa comments`.
+ * buildPrompt renders review comments the same way the sbnn server does, so an
+ * exported page produces the same text as `sbnn comments`.
  */
 export function buildPrompt(
   group: string,
@@ -12,7 +12,7 @@ export function buildPrompt(
   includeResolved = false,
 ): string {
   const open = comments.filter((c) => includeResolved || !c.resolved)
-  const lines: string[] = [`# Review comments (sa group "${group}")`, '']
+  const lines: string[] = [`# Review comments (sbnn group "${group}")`, '']
   if (open.length === 0) {
     lines.push('No open review comments.')
     return lines.join('\n') + '\n'

@@ -1,4 +1,4 @@
-// Package client talks to a running sa server.
+// Package client talks to a running sbnn server.
 package client
 
 import (
@@ -14,12 +14,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tenntenn/sa/internal/history"
-	"github.com/tenntenn/sa/internal/model"
-	"github.com/tenntenn/sa/internal/server"
+	"github.com/tenntenn/sbnn/internal/history"
+	"github.com/tenntenn/sbnn/internal/model"
+	"github.com/tenntenn/sbnn/internal/server"
 )
 
-// Client is an HTTP client for the sa API.
+// Client is an HTTP client for the sbnn API.
 type Client struct {
 	Addr string
 	HTTP *http.Client
@@ -41,14 +41,14 @@ func (c *Client) url(format string, args ...any) string {
 }
 
 // Status reports the state of the server. It doubles as the probe telling
-// whether a sa server owns the port.
+// whether a sbnn server owns the port.
 func (c *Client) Status(ctx context.Context) (*server.Status, error) {
 	var st server.Status
 	if err := c.do(ctx, http.MethodGet, c.url("/_/api/status"), nil, &st); err != nil {
 		return nil, err
 	}
-	if st.App != "sa" {
-		return nil, fmt.Errorf("the server on %s is not sa", c.Addr)
+	if st.App != "sbnn" {
+		return nil, fmt.Errorf("the server on %s is not sbnn", c.Addr)
 	}
 	return &st, nil
 }
@@ -309,5 +309,5 @@ func (c *Client) WaitForReview(ctx context.Context, group string) (*ReviewNotice
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	return nil, fmt.Errorf("the sa server closed the event stream")
+	return nil, fmt.Errorf("the sbnn server closed the event stream")
 }

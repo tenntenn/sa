@@ -2,7 +2,7 @@ import DOMPurify from 'dompurify'
 import { marked } from 'marked'
 
 /**
- * renderMarkdown renders Markdown for pages written with `sa export`.
+ * renderMarkdown renders Markdown for pages written with `sbnn export`.
  *
  * The live app leaves Markdown to mo; an exported page has no server behind
  * it, so it renders the frozen content itself. The result is sanitised: the
@@ -45,7 +45,7 @@ DOMPurify.addHook('afterSanitizeAttributes', (node) => {
  * where it holds text. An attribute closing the tag inside its own value -
  * <noscript><p title="</noscript><img src=x onerror=...>"> - therefore
  * passed the check as an attribute and came back as an element. Turning
- * markup into a DOM safely is a job with a maintained answer, so sa uses it
+ * markup into a DOM safely is a job with a maintained answer, so sbnn uses it
  * rather than keeping its own.
  */
 function sanitize(html: string): string {

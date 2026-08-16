@@ -7,7 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/tenntenn/sa/internal/client"
+	"github.com/tenntenn/sbnn/internal/client"
 )
 
 var (
@@ -24,19 +24,19 @@ var commentsCmd = &cobra.Command{
 	Short: "Print the review comments left in the browser",
 	Long: `Print the review comments of a group.
 
-The comments live in the sa server, so an agent can read them back after a
+The comments live in the sbnn server, so an agent can read them back after a
 human has written them:
 
-  $ sa comments                    # ready to paste into an agent
-  $ sa comments --format json      # machine readable
-  $ sa comments -t api             # comments of the "api" group
-  $ sa comments --clear            # drop them before the next round
+  $ sbnn comments                    # ready to paste into an agent
+  $ sbnn comments --format json      # machine readable
+  $ sbnn comments -t api             # comments of the "api" group
+  $ sbnn comments --clear            # drop them before the next round
 
 It is meant to be combined with other commands, so it says what it found in
 its exit status as well:
 
-  $ sa comments --exit-code        # 1 when there is something to address
-  $ sa wait && sa comments -q && git commit   # commit if the review was clean`,
+  $ sbnn comments --exit-code        # 1 when there is something to address
+  $ sbnn wait && sbnn comments -q && git commit   # commit if the review was clean`,
 	Args:         cobra.NoArgs,
 	RunE:         runComments,
 	SilenceUsage: true,
@@ -44,7 +44,7 @@ its exit status as well:
 
 func init() {
 	f := commentsCmd.Flags()
-	f.StringVarP(&target, "target", "t", "", "Group name (default \"default\", or $SA_TARGET)")
+	f.StringVarP(&target, "target", "t", "", "Group name (default \"default\", or $SBNN_TARGET)")
 	f.IntVarP(&port, "port", "p", DefaultPort, "Server port")
 	f.StringVarP(&bind, "bind", "b", "localhost", "Bind address")
 	f.StringVar(&commentsFormat, "format", "prompt", "Output format: prompt, markdown or json")
@@ -64,7 +64,7 @@ func runComments(cmd *cobra.Command, _ []string) error {
 	}
 	c := client.New(addr(), 5*time.Second)
 	if _, err := c.Status(ctx); err != nil {
-		return fmt.Errorf("no sa server found on %s", c.Addr)
+		return fmt.Errorf("no sbnn server found on %s", c.Addr)
 	}
 
 	if commentsClear {
@@ -72,7 +72,7 @@ func runComments(cmd *cobra.Command, _ []string) error {
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(os.Stderr, "sa: removed %d comment(s) from group %q\n", removed, group)
+		fmt.Fprintf(os.Stderr, "sbnn: removed %d comment(s) from group %q\n", removed, group)
 		return nil
 	}
 

@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/tenntenn/sa/internal/model"
+	"github.com/tenntenn/sbnn/internal/model"
 )
 
 func TestSuggestions(t *testing.T) {

@@ -1,4 +1,4 @@
-module github.com/tenntenn/sa
+module github.com/tenntenn/sbnn
 
 go 1.24.0
 

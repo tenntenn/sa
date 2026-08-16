@@ -9,9 +9,9 @@ import { readSetting, writeSetting } from './storage'
 
 export type Theme = 'auto' | 'light' | 'dark'
 
-const STORAGE_KEY = 'sa.theme'
+const STORAGE_KEY = 'sbnn.theme'
 
-// hostTheme is whatever the page was stamped with before sa touched it, so
+// hostTheme is whatever the page was stamped with before sbnn touched it, so
 // that going back to "auto" restores it rather than dropping it.
 const hostTheme = document.documentElement.getAttribute('data-theme')
 

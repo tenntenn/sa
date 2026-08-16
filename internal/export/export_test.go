@@ -9,9 +9,9 @@ import (
 	"testing/fstest"
 	"time"
 
-	"github.com/tenntenn/sa/internal/diff"
-	"github.com/tenntenn/sa/internal/export"
-	"github.com/tenntenn/sa/internal/model"
+	"github.com/tenntenn/sbnn/internal/diff"
+	"github.com/tenntenn/sbnn/internal/export"
+	"github.com/tenntenn/sbnn/internal/model"
 )
 
 const sampleDiff = `diff --git a/docs/new.md b/docs/new.md
@@ -92,7 +92,7 @@ func TestBuildPrefersWorktree(t *testing.T) {
 func assets() fstest.MapFS {
 	return fstest.MapFS{
 		"assets/index.css": {Data: []byte(".diff{color:red}")},
-		"assets/index.js":  {Data: []byte("console.log('sa')")},
+		"assets/index.js":  {Data: []byte("console.log('sbnn')")},
 	}
 }
 
@@ -106,18 +106,18 @@ func TestRenderStandalonePage(t *testing.T) {
 		"<!doctype html>",
 		"<title>review of x</title>",
 		".diff{color:red}",
-		"console.log('sa')",
+		"console.log('sbnn')",
 		`<div id="root"></div>`,
-		"window.__SA_DATA__ = {",
+		"window.__SBNN_DATA__ = {",
 		"</html>",
 	} {
 		if !strings.Contains(page, want) {
 			t.Errorf("page is missing %q", want)
 		}
 	}
-	// The page has to stand on its own: no request back to a sa server.
+	// The page has to stand on its own: no request back to a sbnn server.
 	if strings.Contains(page, "/_/api/") {
-		t.Error("the exported page references the sa API")
+		t.Error("the exported page references the sbnn API")
 	}
 }
 
@@ -143,7 +143,7 @@ func TestRenderEmbedsReadableJSON(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	const prefix = "window.__SA_DATA__ = "
+	const prefix = "window.__SBNN_DATA__ = "
 	start := strings.Index(page, prefix)
 	if start < 0 {
 		t.Fatal("no payload in the page")

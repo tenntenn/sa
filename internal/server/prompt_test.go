@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tenntenn/sa/internal/model"
-	"github.com/tenntenn/sa/internal/server"
+	"github.com/tenntenn/sbnn/internal/model"
+	"github.com/tenntenn/sbnn/internal/server"
 )
 
 // The verdict is the first thing an agent reads, because it decides what

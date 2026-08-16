@@ -4,15 +4,15 @@ import (
 	"path"
 	"strings"
 
-	"github.com/tenntenn/sa/internal/diff"
-	"github.com/tenntenn/sa/internal/model"
-	"github.com/tenntenn/sa/internal/source"
+	"github.com/tenntenn/sbnn/internal/diff"
+	"github.com/tenntenn/sbnn/internal/model"
+	"github.com/tenntenn/sbnn/internal/source"
 )
 
 // foldFiles decides which files of a diff open shut, and says why for each
 // one.
 //
-// There are exactly two reasons, and neither of them is sa's opinion:
+// There are exactly two reasons, and neither of them is sbnn's opinion:
 //
 //   - the sender asked for it, by naming the file in --collapse. Whoever
 //     produced the diff is the one who knows what their generated files are

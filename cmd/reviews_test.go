@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/tenntenn/sa/internal/history"
+	"github.com/tenntenn/sbnn/internal/history"
 )
 
 // stream is two comments with everything the text columns draw from.
