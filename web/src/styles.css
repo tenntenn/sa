@@ -16,23 +16,44 @@
   --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
 }
 
+/* The palette above is the light theme. A host that states no preference
+   leaves the document unstamped, so the media query carries the dark theme
+   there; an explicit data-theme wins over the operating system either way.
+   Exported pages are read inside such hosts, which is why both exist. */
 @media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0d1117;
-    --bg-soft: #161b22;
-    --bg-inset: #1c2128;
-    --fg: #e6edf3;
-    --fg-muted: #8d96a0;
-    --border: #30363d;
-    --accent: #4493f8;
-    --add-bg: #12261e;
-    --add-strong: #1f6f36;
-    --del-bg: #25171c;
-    --del-strong: #a03b45;
-    --warn: #d29922;
-    --danger: #f85149;
-    --selected: #2d2a11;
+  :root:not([data-theme='light']) {
+  --bg: #0d1117;
+  --bg-soft: #161b22;
+  --bg-inset: #1c2128;
+  --fg: #e6edf3;
+  --fg-muted: #8d96a0;
+  --border: #30363d;
+  --accent: #4493f8;
+  --add-bg: #12261e;
+  --add-strong: #1f6f36;
+  --del-bg: #25171c;
+  --del-strong: #a03b45;
+  --warn: #d29922;
+  --danger: #f85149;
+  --selected: #2d2a11;
   }
+}
+
+:root[data-theme='dark'] {
+  --bg: #0d1117;
+  --bg-soft: #161b22;
+  --bg-inset: #1c2128;
+  --fg: #e6edf3;
+  --fg-muted: #8d96a0;
+  --border: #30363d;
+  --accent: #4493f8;
+  --add-bg: #12261e;
+  --add-strong: #1f6f36;
+  --del-bg: #25171c;
+  --del-strong: #a03b45;
+  --warn: #d29922;
+  --danger: #f85149;
+  --selected: #2d2a11;
 }
 
 * {
