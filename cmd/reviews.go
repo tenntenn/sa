@@ -10,7 +10,6 @@ import (
 
 	"github.com/tenntenn/sa/internal/client"
 	"github.com/tenntenn/sa/internal/history"
-	"github.com/tenntenn/sa/internal/paths"
 )
 
 var (
@@ -20,6 +19,7 @@ var (
 	reviewsStats  bool
 	reviewsAll    bool
 	reviewsTop    int
+	reviewsFile   string
 )
 
 var reviewsCmd = &cobra.Command{
@@ -38,8 +38,17 @@ year of reviews can be read as one thing.
   $ sa reviews --stats             # what they say together
   $ sa reviews --format json       # every comment, for your own analysis
 
-The log is a JSON object per line at ` + "`$XDG_STATE_HOME/sa/reviews.jsonl`" + `,
-so jq and friends work on it directly. Nothing leaves the machine.`,
+The log is a JSON object per line, kept at ` + "`$XDG_STATE_HOME/sa/reviews.jsonl`" + `
+unless --history-file or $SA_HISTORY says otherwise, so jq and friends work
+on it directly and it can be read from anywhere:
+
+  $ SA_HISTORY=.sa/reviews.jsonl sa reviews    # a log kept with the project
+  $ sa reviews --file team.jsonl               # someone else's
+  $ cat */reviews.jsonl | sa reviews --file -  # several at once
+
+A record holds no absolute path and nothing about the machine that wrote it,
+so a log can be committed and read by anyone. Nothing leaves the machine on
+its own.`,
 	Args:         cobra.NoArgs,
 	RunE:         runReviews,
 	SilenceUsage: true,
@@ -50,6 +59,7 @@ func init() {
 	f.StringVarP(&target, "target", "t", "", "Only the reviews of this group")
 	f.IntVarP(&port, "port", "p", DefaultPort, "Server port (used when sa is running)")
 	f.StringVarP(&bind, "bind", "b", "localhost", "Bind address")
+	f.StringVar(&historyPath, "history-file", "", `Where the log is kept (or $SA_HISTORY)`)
 	f.StringVar(&reviewsSince, "since", "", "Only reviews after this: 7d, 36h, 2026-01-31")
 	f.IntVar(&reviewsLimit, "limit", 0, "Keep only the newest n reviews")
 	f.StringVar(&reviewsFormat, "format", "text", "Output format: text, json or jsonl")
@@ -57,6 +67,8 @@ func init() {
 	f.BoolVar(&reviewsAll, "all", false, "Every group, ignoring --target and $SA_TARGET")
 	f.IntVar(&reviewsTop, "top", 5, "How many entries each tally shows")
 	f.BoolVar(&jsonOutput, "json", false, "Shorthand for --format json")
+	f.StringVar(&reviewsFile, "file", "",
+		`Read this log instead of the usual one ("-" reads stdin)`)
 }
 
 func runReviews(cmd *cobra.Command, _ []string) error {
@@ -105,16 +117,30 @@ func runReviews(cmd *cobra.Command, _ []string) error {
 	}
 }
 
-// loadReviews reads the log from disk, or from the running server when it
-// keeps the log somewhere else.
+// loadReviews reads the reviews: from stdin, from the log the flags point
+// at, or - when that one is empty - from the running server, which may be
+// keeping them somewhere this invocation was not told about.
 func loadReviews(cmd *cobra.Command, filter history.Filter) ([]history.Record, error) {
-	path, err := paths.HistoryFile()
-	if err == nil {
-		if records, err := history.Load(path, filter); err == nil && len(records) > 0 {
+	if reviewsFile == "-" {
+		return history.Read(cmd.InOrStdin(), filter)
+	}
+	path := reviewsFile
+	if path == "" {
+		resolved, err := historyFile(historyPath)
+		if err != nil {
+			return nil, err
+		}
+		path = resolved
+	}
+	if path != "" {
+		records, err := history.Load(path, filter)
+		if err != nil {
+			return nil, err
+		}
+		if len(records) > 0 {
 			return records, nil
 		}
 	}
-	// Fall back to the server: it may be the one holding them.
 	c := client.New(addr(), 5*time.Second)
 	if _, err := c.Status(cmd.Context()); err != nil {
 		return nil, nil

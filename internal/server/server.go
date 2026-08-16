@@ -319,6 +319,8 @@ type AddDiffRequest struct {
 	Title   string `json:"title"`
 	BaseDir string `json:"baseDir"`
 	Content string `json:"content"`
+	// Labels are carried through to the review record untouched.
+	Labels map[string]string `json:"labels,omitempty"`
 }
 
 // AddDiffResponse is the answer to a stored diff.
@@ -350,6 +352,7 @@ func (s *Server) handleAddDiff(w http.ResponseWriter, r *http.Request) {
 	d := s.store.AddDiff(name, &model.Diff{
 		Title:   req.Title,
 		BaseDir: req.BaseDir,
+		Labels:  req.Labels,
 		Raw:     req.Content,
 		Files:   files,
 	})

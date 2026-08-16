@@ -103,8 +103,13 @@ type Diff struct {
 	// working directory of the sa invocation that sent the diff.
 	BaseDir   string    `json:"baseDir"`
 	CreatedAt time.Time `json:"createdAt"`
-	Raw       string    `json:"raw"`
-	Files     []*File   `json:"files"`
+	// Labels are whatever the sender wanted to remember about this diff -
+	// a revision, a branch, a ticket, a machine. sa stores them and gives
+	// them no meaning at all, which is what lets a review be joined to
+	// whatever else you keep, git or not.
+	Labels map[string]string `json:"labels,omitempty"`
+	Raw    string            `json:"raw"`
+	Files  []*File           `json:"files"`
 }
 
 // Stats returns the total number of added and deleted lines of the diff.

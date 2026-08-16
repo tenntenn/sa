@@ -48,6 +48,7 @@ var (
 
 	onReviewCommand string
 	onReviewURL     string
+	historyPath     string
 )
 
 var rootCmd = &cobra.Command{
@@ -107,11 +108,19 @@ Waiting for the review:
   $ git diff | sa --on-review 'claude -p "$(sa comments)"'
 
 Looking back:
-  Every submitted review is written down, so a year of them can be read as
-  one thing rather than thrown away a round at a time.
+  Every submitted review is written down, one JSON object per line, so a year
+  of them can be read as one thing rather than thrown away a round at a time.
 
   $ sa reviews --since 7d          # what was reviewed this week
   $ sa reviews --stats             # which files draw comments, and how many
+
+  The log is a file you choose. Keep it out of the way, or put it in the
+  project and commit it - it holds no absolute path and nothing about the
+  machine, and a line per review is what makes both work.
+
+  $ export SA_HISTORY=.sa/reviews.jsonl
+  $ sa reviews --file other.jsonl
+  $ cat */reviews.jsonl | sa reviews --file - --stats
 
 Exporting:
   sa export writes the review as one self-contained HTML page that needs no
@@ -167,6 +176,8 @@ func init() {
 		"Shell command the server runs when the review of this group is submitted")
 	f.StringVar(&onReviewURL, "on-review-url", "",
 		"URL the server POSTs to when the review of this group is submitted")
+	f.StringVar(&historyPath, "history-file", "",
+		`Where submitted reviews are written down ("off" for nowhere, or $SA_HISTORY)`)
 
 	rootCmd.AddCommand(commentCmd, commentsCmd, exportCmd, hookCmd, reviewsCmd, skillCmd, waitCmd)
 }

@@ -33,7 +33,10 @@ type Record struct {
 	Additions   int       `json:"additions"`
 	Deletions   int       `json:"deletions"`
 	Note        string    `json:"note,omitempty"`
-	Comments    []Comment `json:"comments"`
+	// Labels are what the diffs of this round were sent with. A later diff
+	// wins over an earlier one for the same key.
+	Labels   map[string]string `json:"labels,omitempty"`
+	Comments []Comment         `json:"comments"`
 }
 
 // Comment is what a record keeps of a review comment: enough to see the
@@ -70,6 +73,12 @@ func FromGroup(g *model.Group) Record {
 	for _, d := range g.Diffs {
 		if rec.FirstDiffAt.IsZero() || d.CreatedAt.Before(rec.FirstDiffAt) {
 			rec.FirstDiffAt = d.CreatedAt
+		}
+		for k, v := range d.Labels {
+			if rec.Labels == nil {
+				rec.Labels = map[string]string{}
+			}
+			rec.Labels[k] = v
 		}
 		rec.Files += len(d.Files)
 		adds, dels := d.Stats()
@@ -121,6 +130,8 @@ type Filter struct {
 	Since time.Time
 	// Limit keeps only the newest n records; 0 keeps all of them.
 	Limit int
+	// Where keeps only the reviews whose labels match every pair.
+	Where map[string]string
 }
 
 // Load reads the log, oldest first, applying a filter.
@@ -157,6 +168,9 @@ func Read(r io.Reader, f Filter) ([]Record, error) {
 		if !f.Since.IsZero() && rec.ReviewedAt.Before(f.Since) {
 			continue
 		}
+		if !matches(rec, f.Where) {
+			continue
+		}
 		records = append(records, rec)
 	}
 	if err := scanner.Err(); err != nil {
@@ -166,6 +180,52 @@ func Read(r io.Reader, f Filter) ([]Record, error) {
 		records = records[len(records)-f.Limit:]
 	}
 	return records, nil
+}
+
+// matches reports whether a record carries every label asked for.
+func matches(rec Record, where map[string]string) bool {
+	for k, want := range where {
+		if rec.Labels[k] != want {
+			return false
+		}
+	}
+	return true
+}
+
+// Bucket is a pile of reviews that share a label value.
+type Bucket struct {
+	Value   string   `json:"value"`
+	Records []Record `json:"-"`
+	Stats   Stats    `json:"stats"`
+}
+
+// By splits reviews by the value of one label, so that a pattern can be read
+// per branch, per revision, per whatever was labelled. Reviews without the
+// label land under "(none)".
+func By(records []Record, key string) []Bucket {
+	order := make([]string, 0, 4)
+	buckets := map[string][]Record{}
+	for _, rec := range records {
+		value, ok := rec.Labels[key]
+		if !ok || value == "" {
+			value = "(none)"
+		}
+		if _, seen := buckets[value]; !seen {
+			order = append(order, value)
+		}
+		buckets[value] = append(buckets[value], rec)
+	}
+	sort.Slice(order, func(i, j int) bool {
+		if len(buckets[order[i]]) != len(buckets[order[j]]) {
+			return len(buckets[order[i]]) > len(buckets[order[j]])
+		}
+		return order[i] < order[j]
+	})
+	out := make([]Bucket, 0, len(order))
+	for _, value := range order {
+		out = append(out, Bucket{Value: value, Records: buckets[value], Stats: Summarize(buckets[value])})
+	}
+	return out
 }
 
 // Count is one line of a tally.

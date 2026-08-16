@@ -28,7 +28,7 @@ func runServer(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	historyFile, err := paths.HistoryFile()
+	historyFile, err := historyFile(historyPath)
 	if err != nil {
 		return err
 	}
@@ -66,6 +66,15 @@ func spawnServer(ctx context.Context, c *client.Client) (*server.Status, error) 
 		"--mo-bin", moBin,
 		"--mo-port", strconv.Itoa(moPort),
 		"--mo-bind", moBind,
+	}
+	// The server is the one that writes the log, so it has to be told where
+	// this invocation wants it.
+	if resolved, err := historyFile(historyPath); err == nil {
+		if resolved == "" {
+			args = append(args, "--history-file", "off")
+		} else {
+			args = append(args, "--history-file", resolved)
+		}
 	}
 	if allowRemote {
 		args = append(args, "--dangerously-allow-remote-access")
