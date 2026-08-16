@@ -29,6 +29,9 @@ func Prompt(g *model.Group, opts PromptOptions) string {
 	}
 
 	fmt.Fprintf(&b, "# Review comments (sa group %q)\n\n", g.Name)
+	if note := strings.TrimSpace(g.ReviewNote); note != "" {
+		fmt.Fprintf(&b, "The reviewer wrote:\n\n%s\n\n", note)
+	}
 	if len(comments) == 0 {
 		b.WriteString("No open review comments.\n")
 		return b.String()

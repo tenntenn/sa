@@ -68,11 +68,29 @@ Use `--json` when you want to parse the result:
 git diff | sa --target <topic> --json
 ```
 
-### 2. Hand the URL to the human
+### 2. Hand the URL to the human, and decide how you come back
 
-Tell the user the URL sa printed and say what you want reviewed. Then stop
-and wait for them. Do not poll `sa comments` in a loop and do not sleep
-waiting for input; the user tells you when they are done.
+Tell the user the URL sa printed and say what you want reviewed. Then pick
+one of these — never poll `sa comments` in a loop:
+
+- **They are reviewing now and you can wait**: `sa wait --target <topic>`
+  blocks until they press Submit review and then prints the comments. Give it
+  a `--timeout` you can afford; status 2 means "not reviewed yet".
+- **The review may land later** — they are in a meeting, it is late, your
+  session will not live that long: register the follow-up before you go, so
+  the sa server starts it when the review is submitted, and end your turn.
+
+  ```
+  sa hook --target <topic> --on-review '<command that resumes the work>'
+  ```
+
+  The command gets the review prompt on its stdin and `SA_GROUP`, `SA_URL`,
+  `SA_COMMENTS` and `SA_REVIEW_NOTE` in its environment. Ask the user what
+  that command should be for their setup rather than guessing; if they do not
+  want one, tell them to run `sa comments` and paste the result to you when
+  they are back.
+- **Neither**: say you will pick the review up next time, and stop. Nothing
+  is lost — the comments stay in the sa server until they are cleared.
 
 ### 3. Leave your own comments, if you have any
 
@@ -168,6 +186,9 @@ artifact).
 | `sa comments --clear` | Remove the comments of the group |
 | `sa --status [--json]` | Show the running server, its groups and comment counts |
 | `sa --clear -t <name>` | Drop the diffs and comments of a group |
+| `sa wait [-t <name>]` | Block until the review is submitted, then print it |
+| `sa hook --on-review '<cmd>'` | Have the server run something when the review lands |
+| `sa hook [--clear]` | List or drop those hooks |
 | `sa --shutdown` | Stop the server |
 | `... \| sa export <file>` | Write the review as one self-contained HTML page |
 | `... \| sa export --fragment <file>` | The same, body only, for embedding |
@@ -186,4 +207,6 @@ on a non-default port.
 - Comments are stored by the sa server, not in the browser, which is why they
   survive a reload and why you can read them from the command line.
 - `sa --status --json` is the reliable way to check whether comments are
-  waiting: it reports `comments` and `unresolved` per group.
+  waiting: it reports `comments`, `unresolved` and `reviewed` per group.
+  `reviewed` is true once the human has submitted, and false again as soon as
+  a newer diff arrives.

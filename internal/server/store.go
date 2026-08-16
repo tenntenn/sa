@@ -147,12 +147,16 @@ func (s *Store) GroupNames() []string {
 // GroupSummary is the lightweight view of a group used by --status and by
 // the sidebar of the web UI.
 type GroupSummary struct {
-	Name       string `json:"name"`
-	URL        string `json:"url"`
-	Diffs      int    `json:"diffs"`
-	Files      int    `json:"files"`
-	Comments   int    `json:"comments"`
-	Unresolved int    `json:"unresolved"`
+	Name       string    `json:"name"`
+	URL        string    `json:"url"`
+	Diffs      int       `json:"diffs"`
+	Files      int       `json:"files"`
+	Comments   int       `json:"comments"`
+	Unresolved int       `json:"unresolved"`
+	ReviewedAt time.Time `json:"reviewedAt,omitzero"`
+	// Reviewed is false once a diff arrives after the last submission.
+	Reviewed bool `json:"reviewed"`
+	Hooks    int  `json:"hooks"`
 }
 
 // Summary returns a summary of every group.
@@ -161,7 +165,14 @@ func (s *Store) Summary(baseURL string) []GroupSummary {
 	defer s.mu.RUnlock()
 	out := make([]GroupSummary, 0, len(s.groups))
 	for _, g := range s.groups {
-		sum := GroupSummary{Name: g.Name, URL: GroupURL(baseURL, g.Name), Diffs: len(g.Diffs)}
+		sum := GroupSummary{
+			Name:       g.Name,
+			URL:        GroupURL(baseURL, g.Name),
+			Diffs:      len(g.Diffs),
+			ReviewedAt: g.ReviewedAt,
+			Reviewed:   g.Reviewed(),
+			Hooks:      len(g.Hooks),
+		}
 		for _, d := range g.Diffs {
 			sum.Files += len(d.Files)
 		}
@@ -286,6 +297,83 @@ func (s *Store) FileContext(group, diffID, fileID string) (*model.Diff, *model.F
 		return nil, nil, false
 	}
 	return clone(d), clone(f), true
+}
+
+// SubmitReview records that the human is done looking, which is the event
+// an agent waits for.
+func (s *Store) SubmitReview(group, note string) (*model.Group, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	g := s.group(group, false)
+	if g == nil {
+		return nil, false
+	}
+	g.ReviewedAt = time.Now()
+	g.ReviewNote = note
+	s.persist()
+	return clone(g), true
+}
+
+// AddHook registers something to do when a review is submitted.
+func (s *Store) AddHook(group string, h *model.Hook) (*model.Hook, error) {
+	if h.Command == "" && h.URL == "" {
+		return nil, fmt.Errorf("a hook needs a command or a url")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	g := s.group(group, true)
+	for _, existing := range g.Hooks {
+		// Re-registering the same thing (a second `sa --on-review ...` for
+		// the same group) should not pile up duplicates.
+		if existing.Command == h.Command && existing.URL == h.URL {
+			return clone(existing), nil
+		}
+	}
+	h.ID = s.nextID("h")
+	h.CreatedAt = time.Now()
+	g.Hooks = append(g.Hooks, h)
+	s.persist()
+	return clone(h), nil
+}
+
+// Hooks returns the hooks of a group.
+func (s *Store) Hooks(group string) []*model.Hook {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	g := s.group(group, false)
+	if g == nil {
+		return nil
+	}
+	out := make([]*model.Hook, 0, len(g.Hooks))
+	for _, h := range g.Hooks {
+		out = append(out, clone(h))
+	}
+	return out
+}
+
+// DeleteHooks drops the hooks of a group, or the one with the given ID, and
+// returns how many were removed.
+func (s *Store) DeleteHooks(group, id string) int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	g := s.group(group, false)
+	if g == nil {
+		return 0
+	}
+	removed := 0
+	kept := g.Hooks[:0]
+	for _, h := range g.Hooks {
+		if id == "" || h.ID == id {
+			removed++
+			continue
+		}
+		kept = append(kept, h)
+	}
+	g.Hooks = kept
+	if removed > 0 {
+		s.persist()
+	}
+	return removed
 }
 
 // FindFileByPath locates a file inside a group by its path. diffID narrows

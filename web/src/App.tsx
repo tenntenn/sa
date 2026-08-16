@@ -48,12 +48,15 @@ export function App() {
   const narrow = useNarrowLayout()
   const [diffs, setDiffs] = useState<Diff[]>([])
   const [comments, setComments] = useState<Comment[]>([])
+  const [reviewedAt, setReviewedAt] = useState<string | null>(null)
   const [status, setStatus] = useState<Status | null>(null)
   const [selected, setSelected] = useState<Selected | null>(null)
   const [splitRatio, setSplitRatio] = useState(storedSplitRatio)
   const [pane, setPane] = useState<Pane>('diff')
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [reviewNote, setReviewNote] = useState<string | null>(null)
   const [sidebarWidth, setSidebarWidth] = useState(storedSidebarWidth)
   const bodyRef = useRef<HTMLDivElement>(null)
 
@@ -84,6 +87,7 @@ export function App() {
       const data = await client.load(group)
       setDiffs(data.diffs)
       setComments(data.comments)
+      setReviewedAt(data.reviewedAt ?? null)
       setStatus(data.status)
       setError(null)
     } catch (err) {
@@ -140,6 +144,26 @@ export function App() {
       window.setTimeout(() => setCopied(false), 1500)
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
+    }
+  }
+
+  // The review is what anything waiting on sa is waiting for, so saying "I
+  // am done" is an explicit act rather than a guess from the last comment.
+  const summary = status?.groups.find((g) => g.name === group)
+  const reviewed = summary ? summary.reviewed : reviewedAt !== null
+  const hooks = summary?.hooks ?? 0
+
+  const submitReview = async () => {
+    setSubmitting(true)
+    setError(null)
+    try {
+      await client.submitReview(group, reviewNote ?? '')
+      setReviewNote(null)
+      await reload()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setSubmitting(false)
     }
   }
 
@@ -231,6 +255,20 @@ export function App() {
         <button className="ghost" onClick={() => void copyPrompt()} disabled={comments.length === 0}>
           {copied ? 'Copied' : 'Copy prompt'}
         </button>
+        {!client.isStatic && (
+          <button
+            className={reviewed ? 'ghost' : ''}
+            disabled={submitting || diffs.length === 0}
+            onClick={() => setReviewNote((note) => (note === null ? '' : null))}
+            title={
+              hooks > 0
+                ? `Submitting runs ${hooks} hook(s) on the sa server`
+                : 'Tell whoever is waiting that the review is done'
+            }
+          >
+            {reviewed ? 'Reviewed' : 'Submit review'}
+          </button>
+        )}
         {!narrow && (
           <>
             <label className="switch">
@@ -286,6 +324,47 @@ export function App() {
             Preview
           </button>
         </nav>
+      )}
+
+      {reviewNote !== null && (
+        <div className="review-form">
+          <label className="field-label" htmlFor="sa-review-note">
+            Anything to say about the change as a whole? (optional)
+          </label>
+          <textarea
+            id="sa-review-note"
+            className="comment-input"
+            autoFocus
+            rows={3}
+            value={reviewNote}
+            placeholder="Looks good apart from the two comments"
+            onChange={(ev) => setReviewNote(ev.target.value)}
+            onKeyDown={(ev) => {
+              if (ev.key === 'Escape') setReviewNote(null)
+              if (ev.key === 'Enter' && (ev.metaKey || ev.ctrlKey)) void submitReview()
+            }}
+          />
+          <div className="comment-actions">
+            <button disabled={submitting} onClick={() => void submitReview()}>
+              {submitting ? 'Submitting…' : `Submit review (${openComments} open)`}
+            </button>
+            <button className="ghost" disabled={submitting} onClick={() => setReviewNote(null)}>
+              Cancel
+            </button>
+            <span className="hint">
+              {hooks > 0
+                ? `${hooks} hook(s) will run on the sa server`
+                : 'Anything waiting with `sa wait` carries on'}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {reviewed && reviewNote === null && (
+        <div className="review-banner">
+          Review submitted{reviewedAt ? ` ${new Date(reviewedAt).toLocaleString()}` : ''}. Send
+          another diff to start the next round.
+        </div>
       )}
 
       {error && <div className="error banner">{error}</div>}

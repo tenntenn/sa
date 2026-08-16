@@ -2,6 +2,7 @@
 package client
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -180,4 +181,97 @@ func (c *Client) do(ctx context.Context, method, u string, body, out any) error 
 		return nil
 	}
 	return json.NewDecoder(io.LimitReader(resp.Body, 64<<20)).Decode(out)
+}
+
+// SubmitReview marks the review of a group as done, which is what wakes
+// anything waiting on it.
+func (c *Client) SubmitReview(ctx context.Context, group, note string) (*model.Group, error) {
+	var g model.Group
+	body := server.SubmitReviewRequest{Note: note}
+	if err := c.do(ctx, http.MethodPost, c.url("/_/api/groups/%s/review", url.PathEscape(group)), body, &g); err != nil {
+		return nil, err
+	}
+	return &g, nil
+}
+
+// Hooks returns what will run when a review of the group is submitted.
+func (c *Client) Hooks(ctx context.Context, group string) ([]*model.Hook, error) {
+	var hooks []*model.Hook
+	if err := c.do(ctx, http.MethodGet, c.url("/_/api/groups/%s/hooks", url.PathEscape(group)), nil, &hooks); err != nil {
+		return nil, err
+	}
+	return hooks, nil
+}
+
+// AddHook registers a command or a URL to be run when a review is submitted.
+func (c *Client) AddHook(ctx context.Context, group string, h model.Hook) (*model.Hook, error) {
+	var out model.Hook
+	if err := c.do(ctx, http.MethodPost, c.url("/_/api/groups/%s/hooks", url.PathEscape(group)), h, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// DeleteHooks removes the hooks of a group and returns how many went.
+func (c *Client) DeleteHooks(ctx context.Context, group string) (int, error) {
+	var res struct {
+		Removed int `json:"removed"`
+	}
+	if err := c.do(ctx, http.MethodDelete, c.url("/_/api/groups/%s/hooks", url.PathEscape(group)), nil, &res); err != nil {
+		return 0, err
+	}
+	return res.Removed, nil
+}
+
+// ReviewNotice is what the server pushes when a review is submitted.
+type ReviewNotice struct {
+	Type       string    `json:"type"`
+	Group      string    `json:"group"`
+	ReviewedAt time.Time `json:"reviewedAt"`
+	Comments   int       `json:"comments"`
+}
+
+// WaitForReview blocks on the server's event stream until the given group is
+// reviewed. Nothing is polled: the server pushes the notice.
+func (c *Client) WaitForReview(ctx context.Context, group string) (*ReviewNotice, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.url("/_/events"), nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Accept", "text/event-stream")
+	// The stream stays open for as long as the review takes, so this one
+	// request must not carry the client timeout.
+	stream := &http.Client{}
+	resp, err := stream.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("cannot listen to %s: %s", c.Addr, resp.Status)
+	}
+
+	scanner := bufio.NewScanner(resp.Body)
+	scanner.Buffer(make([]byte, 0, 64<<10), 1<<20)
+	for scanner.Scan() {
+		line := scanner.Text()
+		data, ok := strings.CutPrefix(line, "data: ")
+		if !ok {
+			continue
+		}
+		var notice ReviewNotice
+		if err := json.Unmarshal([]byte(data), &notice); err != nil {
+			continue
+		}
+		if notice.Type == "review" && (notice.Group == "" || notice.Group == group) {
+			return &notice, nil
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	return nil, fmt.Errorf("the sa server closed the event stream")
 }

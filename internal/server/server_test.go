@@ -10,6 +10,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/tenntenn/sa/internal/mo"
 	"github.com/tenntenn/sa/internal/model"
@@ -578,5 +579,133 @@ func TestCommentByPathLineNotInDiff(t *testing.T) {
 	}, nil)
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("status = %s, want 400 for a line outside the diff", resp.Status)
+	}
+}
+
+func TestSubmitReviewNotifiesAndRunsHooks(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the hook is a shell command")
+	}
+	ts, srv := newTestServer(t)
+	postJSON(t, ts.URL+"/_/api/groups/default/diffs", AddDiffRequest{Content: sampleDiff}, nil)
+
+	// A hook stands in for the agent that is no longer waiting.
+	marker := filepath.Join(t.TempDir(), "ran")
+	postJSON(t, ts.URL+"/_/api/groups/default/hooks", model.Hook{
+		Command: "cat > " + marker,
+	}, nil)
+
+	// Something waiting on the event stream is told as well.
+	events := make(chan string, 1)
+	go func() {
+		resp, err := http.Get(ts.URL + "/_/events")
+		if err != nil {
+			return
+		}
+		defer resp.Body.Close()
+		buf := make([]byte, 4096)
+		for {
+			n, err := resp.Body.Read(buf)
+			if n > 0 && strings.Contains(string(buf[:n]), `"type":"review"`) {
+				events <- string(buf[:n])
+				return
+			}
+			if err != nil {
+				return
+			}
+		}
+	}()
+	// Give the subscriber a moment to be registered before submitting.
+	for i := 0; i < 50 && srv.broker.count() == 0; i++ {
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	var g model.Group
+	resp := postJSON(t, ts.URL+"/_/api/groups/default/review", SubmitReviewRequest{Note: "ok apart from one thing"}, &g)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %s", resp.Status)
+	}
+	if g.ReviewedAt.IsZero() || !g.Reviewed() {
+		t.Fatalf("group = %+v, want a submitted review", g)
+	}
+
+	select {
+	case <-events:
+	case <-time.After(2 * time.Second):
+		t.Error("no review event was pushed")
+	}
+
+	// The hook receives the prompt on stdin.
+	deadline := time.Now().Add(5 * time.Second)
+	var written []byte
+	for time.Now().Before(deadline) {
+		b, err := os.ReadFile(marker)
+		if err == nil && len(b) > 0 {
+			written = b
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if len(written) == 0 {
+		t.Fatal("the hook did not run")
+	}
+	if !strings.Contains(string(written), "ok apart from one thing") {
+		t.Errorf("the hook got %q, want the review note in the prompt", written)
+	}
+}
+
+func TestReviewIsStaleAfterANewDiff(t *testing.T) {
+	ts, _ := newTestServer(t)
+	postJSON(t, ts.URL+"/_/api/groups/default/diffs", AddDiffRequest{Content: sampleDiff}, nil)
+	postJSON(t, ts.URL+"/_/api/groups/default/review", SubmitReviewRequest{}, nil)
+
+	var st Status
+	getJSON(t, ts.URL+"/_/api/status", &st)
+	if !st.Groups[0].Reviewed {
+		t.Fatal("the group should count as reviewed")
+	}
+
+	// A new round starts when the next diff lands.
+	postJSON(t, ts.URL+"/_/api/groups/default/diffs", AddDiffRequest{Content: goDiff}, nil)
+	getJSON(t, ts.URL+"/_/api/status", &st)
+	if st.Groups[0].Reviewed {
+		t.Error("a diff sent after the review should make it stale again")
+	}
+}
+
+func TestHooksAreListedAndCleared(t *testing.T) {
+	ts, _ := newTestServer(t)
+	postJSON(t, ts.URL+"/_/api/groups/default/diffs", AddDiffRequest{Content: sampleDiff}, nil)
+	postJSON(t, ts.URL+"/_/api/groups/default/hooks", model.Hook{Command: "echo one"}, nil)
+	// The same hook twice is one hook.
+	postJSON(t, ts.URL+"/_/api/groups/default/hooks", model.Hook{Command: "echo one"}, nil)
+	postJSON(t, ts.URL+"/_/api/groups/default/hooks", model.Hook{URL: "http://example.com/x"}, nil)
+
+	var hooks []*model.Hook
+	getJSON(t, ts.URL+"/_/api/groups/default/hooks", &hooks)
+	if len(hooks) != 2 {
+		t.Fatalf("got %d hooks, want 2", len(hooks))
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, ts.URL+"/_/api/groups/default/hooks", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	getJSON(t, ts.URL+"/_/api/groups/default/hooks", &hooks)
+	if len(hooks) != 0 {
+		t.Errorf("got %d hooks after clearing, want 0", len(hooks))
+	}
+}
+
+func TestHookNeedsSomethingToDo(t *testing.T) {
+	ts, _ := newTestServer(t)
+	resp := postJSON(t, ts.URL+"/_/api/groups/default/hooks", model.Hook{}, nil)
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %s, want 400 for an empty hook", resp.Status)
 	}
 }

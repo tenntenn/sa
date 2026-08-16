@@ -26,6 +26,8 @@ export interface GroupData {
   diffs: Diff[]
   comments: Comment[]
   status: Status | null
+  /** reviewedAt is when the review was last submitted, if it was. */
+  reviewedAt?: string
 }
 
 /**
@@ -43,6 +45,9 @@ export interface SaClient {
   deleteComment(group: string, id: string): Promise<void>
   deleteDiff(group: string, diffId: string): Promise<void>
   prompt(group: string): Promise<string>
+  /** submitReview tells everyone waiting that the review is done. It only
+   * exists where there is a server to tell. */
+  submitReview(group: string, note: string): Promise<void>
   /** preview returns the mo page for a file, embedded or linked. */
   preview(group: string, diffId: string, fileId: string): Promise<PreviewResult>
   /** previewMarkdown renders the Markdown in this page instead, which is
@@ -73,7 +78,12 @@ function createLiveClient(): SaClient {
     isStatic: false,
     async load(group) {
       const [g, status] = await Promise.all([api.getGroup(group), api.getStatus()])
-      return { diffs: g.diffs ?? [], comments: g.comments ?? [], status }
+      return {
+        diffs: g.diffs ?? [],
+        comments: g.comments ?? [],
+        reviewedAt: g.reviewedAt,
+        status,
+      }
     },
     async addComment(group, comment) {
       await api.addComment(group, comment)
@@ -89,6 +99,9 @@ function createLiveClient(): SaClient {
     },
     prompt(group) {
       return api.getPrompt(group)
+    },
+    async submitReview(group, note) {
+      await api.submitReview(group, note)
     },
     async preview(group, diffId, fileId) {
       const p = await api.getPreview(group, diffId, fileId)
@@ -193,6 +206,9 @@ function createStaticClient(data: StaticPayload): SaClient {
     },
     async prompt(group) {
       return buildPrompt(group, data.diffs ?? [], read())
+    },
+    async submitReview() {
+      throw new Error('an exported page has no server to submit the review to')
     },
     async preview(_group, diffId, fileId) {
       const entry = data.previews?.[`${diffId}:${fileId}`]

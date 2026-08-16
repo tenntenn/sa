@@ -44,6 +44,9 @@ var (
 	moPort      int
 	moBind      string
 	allowRemote bool
+
+	onReviewCommand string
+	onReviewURL     string
 )
 
 var rootCmd = &cobra.Command{
@@ -95,6 +98,13 @@ Review comments:
 
   $ sa comment main.go:42 -m "Should this be a 404?" --author claude
 
+Waiting for the review:
+  A review lands when the human is ready, which may be after a meeting or a
+  night. sa can wait for it, or start something itself when it arrives.
+
+  $ sa wait                       # blocks until "Submit review" is pressed
+  $ git diff | sa --on-review 'claude -p "$(sa comments)"'
+
 Exporting:
   sa export writes the review as one self-contained HTML page that needs no
   server, which is how a review travels to someone who does not run sa.
@@ -143,8 +153,12 @@ func init() {
 	f.StringVar(&moBind, "mo-bind", mo.DefaultBind, "Bind address of the mo server")
 	f.BoolVar(&allowRemote, "dangerously-allow-remote-access", false,
 		"Allow binding to a non-loopback address (no authentication!)")
+	f.StringVar(&onReviewCommand, "on-review", "",
+		"Shell command the server runs when the review of this group is submitted")
+	f.StringVar(&onReviewURL, "on-review-url", "",
+		"URL the server POSTs to when the review of this group is submitted")
 
-	rootCmd.AddCommand(commentCmd, commentsCmd, exportCmd, skillCmd)
+	rootCmd.AddCommand(commentCmd, commentsCmd, exportCmd, hookCmd, skillCmd, waitCmd)
 }
 
 func addr() string {
@@ -183,6 +197,10 @@ func run(cmd *cobra.Command, _ []string) error {
 	c := client.New(addr(), 5*time.Second)
 	status, started, err := ensureServer(ctx, c)
 	if err != nil {
+		return err
+	}
+
+	if err := registerHooks(ctx, c, group); err != nil {
 		return err
 	}
 

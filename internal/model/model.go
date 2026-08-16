@@ -247,6 +247,39 @@ type Group struct {
 	Name     string     `json:"name"`
 	Diffs    []*Diff    `json:"diffs"`
 	Comments []*Comment `json:"comments"`
+	// ReviewedAt is when the human last said they were done. It is what
+	// tells an agent that the comments are worth reading: a review is over
+	// when the reviewer says so, not when the first comment appears.
+	ReviewedAt time.Time `json:"reviewedAt,omitzero"`
+	// ReviewNote is what the reviewer wrote when submitting, if anything.
+	ReviewNote string `json:"reviewNote,omitempty"`
+	// Hooks are run when a review is submitted, so that work can carry on
+	// even though whoever sent the diff is long gone.
+	Hooks []*Hook `json:"hooks,omitempty"`
+}
+
+// Hook is what sa does when a review is submitted.
+type Hook struct {
+	ID string `json:"id"`
+	// Command is run through the shell, with the prompt on its stdin.
+	Command string `json:"command,omitempty"`
+	// URL is sent a JSON POST describing the review.
+	URL       string    `json:"url,omitempty"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
+// Reviewed reports whether the group was reviewed after its newest diff
+// arrived. A diff sent after the last submission starts a new round.
+func (g *Group) Reviewed() bool {
+	if g.ReviewedAt.IsZero() {
+		return false
+	}
+	for _, d := range g.Diffs {
+		if d.CreatedAt.After(g.ReviewedAt) {
+			return false
+		}
+	}
+	return true
 }
 
 // FindDiff returns the diff with the given ID.

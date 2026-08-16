@@ -72,6 +72,9 @@ export interface Group {
   name: string
   diffs: Diff[] | null
   comments: Comment[] | null
+  /** reviewedAt is when the review was last submitted. */
+  reviewedAt?: string
+  reviewNote?: string
 }
 
 export interface GroupSummary {
@@ -81,6 +84,11 @@ export interface GroupSummary {
   files: number
   comments: number
   unresolved: number
+  reviewedAt?: string
+  /** reviewed is false again once a diff arrives after the last review. */
+  reviewed: boolean
+  /** hooks is what the server will run when the review is submitted. */
+  hooks: number
 }
 
 export interface Status {

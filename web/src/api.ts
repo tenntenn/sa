@@ -97,6 +97,14 @@ export async function deleteDiff(group: string, diffId: string): Promise<void> {
   if (!resp.ok) throw new Error((await resp.text()).trim() || resp.statusText)
 }
 
+export function submitReview(group: string, note: string): Promise<Group> {
+  return request<Group>(`/_/api/groups/${encodeURIComponent(group)}/review`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ note }),
+  })
+}
+
 export async function getPrompt(group: string): Promise<string> {
   const resp = await fetch(`/_/api/groups/${encodeURIComponent(group)}/prompt`)
   if (!resp.ok) throw new Error((await resp.text()).trim() || resp.statusText)

@@ -115,6 +115,45 @@ $ sa comment --json --author claude <<'EOF'
 EOF
 ```
 
+### Finishing a review
+
+**Submit review** in the header says "I am done looking". That is the moment
+sa tells everything that is waiting — an agent, a script, another machine —
+that the comments are worth reading. An optional note goes with it and shows
+up at the top of the prompt. Sending another diff starts the next round, and
+the group counts as unreviewed again.
+
+### Waiting, and being woken up
+
+A review lands when the human is ready: after the meeting, after lunch,
+tomorrow. Two ways to be there when it does.
+
+**Wait for it.** `sa wait` blocks on the server's event stream — no polling,
+nothing missed, and a review that already happened returns straight away:
+
+```console
+$ git diff | sa --target api
+$ sa wait --target api                 # returns when the review is submitted
+$ sa wait --target api --timeout 30m   # exits with status 2 if it is not
+```
+
+**Or have the server start the work.** Register what to do and go away; sa
+runs it when the human presses Submit review, whether or not anyone is still
+around:
+
+```console
+$ git diff | sa --on-review 'claude -p "$(sa comments)"'
+$ sa hook --on-review-url http://localhost:9000/reviews   # a POST instead
+$ sa hook            # what is registered
+$ sa hook --clear
+```
+
+The command runs through the shell with the review prompt on its stdin and
+`SA_GROUP`, `SA_URL`, `SA_SERVER`, `SA_PORT`, `SA_COMMENTS` and
+`SA_REVIEW_NOTE` in its environment. Hooks belong to a group and survive a
+restart. They run a command of your own on your own machine, which is what
+makes them useful and worth being deliberate about.
+
 ### Reading the comments back
 
 ```console
@@ -225,7 +264,7 @@ because the embedded frontend is not part of it.
 | sa server | `localhost:6280` (`--port`) |
 | mo server | `localhost:6275` (`--mo-port`) |
 | Preview proxy | a loopback port picked at startup |
-| Session state | `$XDG_STATE_HOME/sa/session-<port>.json` |
+| Session state (diffs, comments, hooks) | `$XDG_STATE_HOME/sa/session-<port>.json` |
 | Server log | `$XDG_STATE_HOME/sa/server-<port>.log` |
 | Rebuilt previews | `$XDG_CACHE_HOME/sa/preview/…` |
 | Exported pages | wherever you point `sa export` |

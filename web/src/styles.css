@@ -991,3 +991,21 @@ a {
 .comment:has(.badge.author) {
   border-left-color: var(--warn);
 }
+
+/* ---------- submitting a review ---------- */
+
+.review-form {
+  flex: none;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-soft);
+}
+
+.review-banner {
+  flex: none;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-inset);
+  color: var(--fg-muted);
+  font-size: 12px;
+}

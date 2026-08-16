@@ -156,6 +156,11 @@ func (s *Server) handler() http.Handler {
 	mux.HandleFunc("DELETE /_/api/groups/{group}/comments/{id}", s.handleDeleteComment)
 	mux.HandleFunc("DELETE /_/api/groups/{group}/comments", s.handleClearComments)
 	mux.HandleFunc("GET /_/api/groups/{group}/prompt", s.handlePrompt)
+	mux.HandleFunc("POST /_/api/groups/{group}/review", s.handleSubmitReview)
+	mux.HandleFunc("GET /_/api/groups/{group}/hooks", s.handleHooks)
+	mux.HandleFunc("POST /_/api/groups/{group}/hooks", s.handleAddHook)
+	mux.HandleFunc("DELETE /_/api/groups/{group}/hooks", s.handleDeleteHooks)
+	mux.HandleFunc("DELETE /_/api/groups/{group}/hooks/{id}", s.handleDeleteHooks)
 	mux.HandleFunc("POST /_/api/shutdown", s.handleShutdown)
 	mux.HandleFunc("GET /_/events", s.handleEvents)
 	mux.Handle("GET /", s.spaHandler())
@@ -541,6 +546,74 @@ func (s *Server) handlePrompt(w http.ResponseWriter, r *http.Request) {
 	io.WriteString(w, Prompt(g, opts))
 }
 
+// SubmitReviewRequest is the body of POST .../review.
+type SubmitReviewRequest struct {
+	Note string `json:"note"`
+}
+
+// handleSubmitReview records that the human is done. It is the moment the
+// comments become worth reading, and the moment the hooks fire.
+func (s *Server) handleSubmitReview(w http.ResponseWriter, r *http.Request) {
+	name, ok := s.groupParam(w, r)
+	if !ok {
+		return
+	}
+	var req SubmitReviewRequest
+	if r.ContentLength > 0 {
+		if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&req); err != nil {
+			http.Error(w, "invalid request: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+	}
+	g, found := s.store.SubmitReview(name, req.Note)
+	if !found {
+		http.Error(w, "no such group", http.StatusNotFound)
+		return
+	}
+	s.notifyReview(g)
+	s.runHooks(g)
+	writeJSON(w, http.StatusOK, g)
+}
+
+func (s *Server) handleHooks(w http.ResponseWriter, r *http.Request) {
+	name, ok := s.groupParam(w, r)
+	if !ok {
+		return
+	}
+	hooks := s.store.Hooks(name)
+	if hooks == nil {
+		hooks = []*model.Hook{}
+	}
+	writeJSON(w, http.StatusOK, hooks)
+}
+
+func (s *Server) handleAddHook(w http.ResponseWriter, r *http.Request) {
+	name, ok := s.groupParam(w, r)
+	if !ok {
+		return
+	}
+	var h model.Hook
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&h); err != nil {
+		http.Error(w, "invalid request: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	added, err := s.store.AddHook(name, &model.Hook{Command: h.Command, URL: h.URL})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusOK, added)
+}
+
+func (s *Server) handleDeleteHooks(w http.ResponseWriter, r *http.Request) {
+	name, ok := s.groupParam(w, r)
+	if !ok {
+		return
+	}
+	removed := s.store.DeleteHooks(name, r.PathValue("id"))
+	writeJSON(w, http.StatusOK, map[string]int{"removed": removed})
+}
+
 func (s *Server) handleShutdown(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "shutting down"})
 	if f, ok := w.(http.Flusher); ok {
@@ -583,6 +656,21 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 			flusher.Flush()
 		}
 	}
+}
+
+// notifyReview tells everyone listening that a review was submitted. An
+// agent waiting with `sa wait` is one of them.
+func (s *Server) notifyReview(g *model.Group) {
+	msg, err := json.Marshal(map[string]any{
+		"type":       "review",
+		"group":      g.Name,
+		"reviewedAt": g.ReviewedAt,
+		"comments":   len(openComments(g)),
+	})
+	if err != nil {
+		return
+	}
+	s.broker.publish(msg)
 }
 
 // notify tells connected browsers that a group changed.
@@ -654,6 +742,14 @@ func (b *broker) unsubscribe(ch chan []byte) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	delete(b.subs, ch)
+}
+
+// count reports how many listeners are connected, which tests use to know
+// that a subscriber is ready.
+func (b *broker) count() int {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return len(b.subs)
 }
 
 func (b *broker) publish(msg []byte) {
