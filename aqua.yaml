@@ -4,3 +4,4 @@ registries:
 
 packages:
   - name: go-task/task@v3.52.0
+  - name: Songmu/tagpr@v1.20.1
