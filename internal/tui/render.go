@@ -96,7 +96,17 @@ func DiffLines(f *model.File, top, width, height int) []string {
 	if f.IsBinary {
 		return []string{fit("binary file", width)}
 	}
-	body := diffBody(f)
+	return PaneLines(diffBody(f), top, width, height)
+}
+
+// PaneLines draws body from line top, exactly height lines long. A line wider
+// than the pane is cut with an ellipsis; a body shorter than the pane is
+// padded with blank lines, so the rows below it are the pane's own and not
+// whatever the previous frame left there.
+func PaneLines(body []string, top, width, height int) []string {
+	if width <= 0 || height <= 0 {
+		return nil
+	}
 	top = clamp(top, 0, len(body))
 	out := make([]string, 0, height)
 	for i := top; i < len(body) && len(out) < height; i++ {
@@ -168,7 +178,20 @@ func Header(s *State) string {
 		adds += f.Additions
 		dels += f.Deletions
 	}
-	return fmt.Sprintf("sbnn tui  %d %s  +%d -%d", len(s.Files), plural(len(s.Files), "file"), adds, dels)
+	return fmt.Sprintf("sbnn tui  %d %s  +%d -%d  [%s]",
+		len(s.Files), plural(len(s.Files), "file"), adds, dels, viewName(s.View))
+}
+
+// viewName is what the header calls a view.
+func viewName(v View) string {
+	switch v {
+	case ViewMarkdown:
+		return "markdown"
+	case ViewRaw:
+		return "raw"
+	default:
+		return "diff"
+	}
 }
 
 // Footer is the bottom line of the frame: the keys, and which pane they move.
@@ -179,7 +202,9 @@ func Footer(s *State) string {
 	if s.Focus == PaneDiff {
 		pane = "diff"
 	}
-	return fmt.Sprintf("q: quit  [%s]  j/k: move  tab: switch pane  g/G: first/last  ctrl+d/ctrl+u: page", pane)
+	// The preview key is listed whether or not this file has one. A row of
+	// keys that changes as the cursor moves is a row nobody can read.
+	return fmt.Sprintf("q: quit  [%s]  j/k: move  tab: switch pane  p: preview  g/G: first/last  ctrl+d/ctrl+u: page", pane)
 }
 
 // Frame draws the whole screen: the header, the two panes side by side, and
@@ -199,9 +224,17 @@ func Frame(s *State, width, height int) []string {
 		if listWidth > 0 {
 			list = FileListLines(s, listWidth, body)
 		}
-		diff := DiffLines(s.Current(), s.Top, diffWidth, body)
+		// The right pane is one pane with three things it can show, rather
+		// than three panes with one of them on: a screen is not wide enough
+		// to read a diff and the file it changed side by side.
+		var right []string
+		if s.View == ViewDiff {
+			right = DiffLines(s.Current(), s.Top, diffWidth, body)
+		} else {
+			right = PaneLines(s.PaneBody(diffWidth), s.Top, diffWidth, body)
+		}
 		for i := 0; i < body; i++ {
-			out = append(out, bodyRow(at(list, i), at(diff, i), listWidth))
+			out = append(out, bodyRow(at(list, i), at(right, i), listWidth))
 		}
 	}
 	return append(out, fit(Footer(s), width))
