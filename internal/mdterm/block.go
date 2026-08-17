@@ -64,9 +64,15 @@ func isBlank(l string) bool {
 // browser side, which calls marked with breaks off. Two spaces at the end of a
 // line are the one way to ask for a line break, and that ends up as a break
 // here too, each piece wrapped on its own.
+//
+// The join is a strings.Builder rather than a string grown with +=, because a
+// paragraph is as long as its author made it: a release note or a design doc
+// pasted into a review arrives as thousands of lines with no blank one between
+// them, and copying the whole run once per line makes the cost of a document
+// square its length.
 func paragraph(lines []string, opts Options) (int, []string) {
 	var segments []string
-	var cur string
+	var cur strings.Builder
 	n := 0
 	for ; n < len(lines); n++ {
 		l := lines[n]
@@ -78,18 +84,17 @@ func paragraph(lines []string, opts Options) (int, []string) {
 		}
 		hard := len(l)-len(strings.TrimRight(l, " ")) >= 2
 		text := strings.TrimSpace(l)
-		if cur == "" {
-			cur = text
-		} else {
-			cur += " " + text
+		if cur.Len() > 0 {
+			cur.WriteByte(' ')
 		}
+		cur.WriteString(text)
 		if hard {
-			segments = append(segments, cur)
-			cur = ""
+			segments = append(segments, cur.String())
+			cur.Reset()
 		}
 	}
-	if cur != "" {
-		segments = append(segments, cur)
+	if cur.Len() > 0 {
+		segments = append(segments, cur.String())
 	}
 	var out []string
 	for _, seg := range segments {
@@ -394,7 +399,13 @@ func closesFence(l string, char byte, count int) bool {
 
 func codeLine(l string, opts Options) string {
 	if l == "" {
-		return "" // nothing to indent, and no colour to give it
+		// The indent is written even with nothing behind it. An empty line
+		// here would be indistinguishable from the blank line Render puts
+		// between two blocks, and the row the author left inside the fence
+		// would be trimmed away as if they had never typed it. There is no
+		// colour on it either: an escape pair around nothing decorates
+		// nothing.
+		return "  "
 	}
 	if opts.Color {
 		return "  " + codeOn + l + codeOff

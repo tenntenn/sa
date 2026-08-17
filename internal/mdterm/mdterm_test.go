@@ -1,9 +1,13 @@
 package mdterm
 
 import (
+	"fmt"
+	"os"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 // kitchenSink is one document with every construct this package knows about,
@@ -25,6 +29,70 @@ const kitchenSink = "---\ntitle: Everything\n---\n" +
 	"\n| name | n |\n| :--- | --: |\n| foo | 1 |\n| barbar | 22 |\n" +
 	"\n---\n" +
 	"\n![shot](a.png) and <https://example.org>\n"
+
+// escapeSink is a document carrying the escapes a hostile diff would carry.
+// kitchenSink has not one ESC byte in it, so on its own it lets every claim
+// about escapes in the output pass without ever testing one; the tests that
+// make such a claim read this fixture as well, and check first that it still
+// holds an ESC.
+//
+// Each line is somewhere an escape could ride in from: prose, a heading, a
+// fenced block that is copied out untouched, a list item, a table cell, a
+// quote. \x1b[2J clears the screen and \x1bc resets the terminal - those two
+// are the ones that destroy the review rather than colour it.
+const escapeSink = "a \x1b[2J b\n" +
+	"reset \x1bc here\n" +
+	"\n# head \x1b[31m red\n" +
+	"\ncolour \x1b[31mon\x1b[0m off\n" +
+	"\ntitle \x1b]0;title\x07 set\n" +
+	"\n```\n\x1b[2J\n\x1bc\n\x1b]0;title\x07\n```\n" +
+	"\n- item \x1b[1m bold\n" +
+	"\n> quoted \x1b[7m inverse\n" +
+	"\n| a \x1b[31m | b |\n| --- | --- |\n| \x1bc | \x1b[0m |\n" +
+	"\n8-bit CSI 31m and DEL \x7f and NUL \x00 end\n"
+
+// escapeSinkMustBite fails the test that calls it when escapeSink has stopped
+// containing the thing every escape test is about. A fixture that lost its ESC
+// bytes would let all of them pass while checking nothing, which is exactly how
+// this package shipped an unenforced invariant once already.
+func escapeSinkMustBite(t *testing.T) {
+	t.Helper()
+	if !strings.Contains(escapeSink, "\x1b") {
+		t.Fatal("fixture contains no ESC byte; this test would pass vacuously")
+	}
+	for _, want := range []string{"\x1b[2J", "\x1bc", "\x1b[31m", "\x1b[0m", "\x1b]0;title\x07"} {
+		if !strings.Contains(escapeSink, want) {
+			t.Fatalf("fixture no longer contains %q, which this test exists to catch", want)
+		}
+	}
+}
+
+// knownEscapes are the only sequences this package ever writes. Anything else
+// in the output came from the input, which means it was not defanged.
+var knownEscapes = []string{
+	boldOn, boldOff, italicOn, italicOff, strikeOn, strikeOff, codeOn, codeOff,
+}
+
+// checkKnownEscapes reports every escape in out that this package did not write.
+func checkKnownEscapes(t *testing.T, label, out string) {
+	t.Helper()
+	for i := 0; i < len(out); {
+		if out[i] != 0x1b {
+			i++
+			continue
+		}
+		n := escapeLen(out[i:])
+		if n == 0 {
+			t.Errorf("%s: ESC that opens no known sequence at %d: %q", label, i, out[i:min(i+12, len(out))])
+			return
+		}
+		if seq := out[i : i+n]; !slices.Contains(knownEscapes, seq) {
+			t.Errorf("%s: output carries an escape this package never writes: %q", label, seq)
+			return
+		}
+		i += n
+	}
+}
 
 func check(t *testing.T, name, got, want string) {
 	t.Helper()
@@ -131,7 +199,7 @@ func TestCodeBlocks(t *testing.T) {
 			"  func main() {\n  \tx :=  1\n  }\n"},
 		{"tildes fence too", "~~~\nx\n~~~", Options{}, "  x\n"},
 		{"an unclosed fence runs to the end", "```\nx", Options{}, "  x\n"},
-		{"a blank line inside stays blank", "```\na\n\nb\n```", Options{}, "  a\n\n  b\n"},
+		{"a blank line inside keeps the indent", "```\na\n\nb\n```", Options{}, "  a\n  \n  b\n"},
 		{"a long line is not wrapped", "```\n" + strings.Repeat("x", 30) + "\n```", Options{Width: 10},
 			"  " + strings.Repeat("x", 30) + "\n"},
 		{"colour wraps each line inside the indent", "```\na\nb\n```", Options{Color: true},
@@ -281,6 +349,15 @@ func TestFrontMatter(t *testing.T) {
 			Options{Width: 20},
 			strings.Repeat("-", 20) + "\n\ntitle: x\n",
 		},
+		{
+			// Front matter is the one block that can arrive holding blank
+			// lines of its own, so it is where the rule that no two of them
+			// survive is worth stating outright. It applies here too.
+			"a run of blank lines inside front matter closes up",
+			"---\ntitle: x\n\n\n\nname: y\n---\n\nbody\n",
+			Options{},
+			"title: x\n\nname: y\n\nbody\n",
+		},
 	}
 	for _, tt := range tests {
 		check(t, tt.name, Render(tt.src, tt.opts), tt.want)
@@ -334,13 +411,49 @@ func TestLinesMatchesRender(t *testing.T) {
 }
 
 // Colour off means colour off: the output of a plain render has to be safe to
-// write into a file, a pipe or a test's golden data.
+// write into a file, a pipe or a test's golden data. The input is not, so the
+// fixture that carries escapes is rendered here too - without it the claim is
+// only ever made about a document that had no escape to lose.
 func TestPlainOutputHasNoEscapes(t *testing.T) {
-	for _, width := range []int{1, 2, 10, 20, 80} {
-		out := Render(kitchenSink, Options{Width: width})
-		if strings.Contains(out, "\x1b") {
-			t.Errorf("width=%d: plain output contains an escape sequence: %q", width, out)
+	escapeSinkMustBite(t)
+	for _, src := range []struct {
+		name string
+		text string
+	}{
+		{"kitchenSink", kitchenSink},
+		{"escapeSink", escapeSink},
+	} {
+		for _, width := range []int{1, 2, 10, 20, 80} {
+			out := Render(src.text, Options{Width: width})
+			if strings.Contains(out, "\x1b") {
+				t.Errorf("%s width=%d: plain output contains an escape sequence: %q", src.name, width, out)
+			}
 		}
+	}
+}
+
+// Colour on is not permission to pass the input's escapes along. Every escape
+// in the output has to be one of the eight this package writes, which is a
+// claim a machine can check and a claim "it looked fine" cannot.
+func TestColourOutputOnlyUsesKnownEscapes(t *testing.T) {
+	escapeSinkMustBite(t)
+	for _, src := range []struct {
+		name string
+		text string
+	}{
+		{"kitchenSink", kitchenSink},
+		{"escapeSink", escapeSink},
+	} {
+		for _, width := range []int{1, 2, 10, 20, 80} {
+			out := Render(src.text, Options{Width: width, Color: true})
+			checkKnownEscapes(t, fmt.Sprintf("%s width=%d", src.name, width), out)
+		}
+	}
+	// The escapes the input carried are shown as the pictures of themselves,
+	// so nothing the author typed went missing on the way.
+	out := Render(escapeSink, Options{Width: 80, Color: true})
+	if !strings.Contains(out, "␛") {
+		t.Errorf("colour output dropped the input's ESC instead of showing it: %q", out)
 	}
 }
 
@@ -398,26 +511,187 @@ func TestMalformedInputIsPrintedNotPanicked(t *testing.T) {
 		strings.Repeat("**", 50),
 		strings.Repeat("[", 50) + strings.Repeat("]", 50),
 		strings.Repeat("あ", 200),
+		// A fence whose first or last line is blank: the row inside it must
+		// survive, and the gap around it must not double.
+		"```\n\na\n```\n",
+		"```\na\n\n```\n",
+		"p\n\n```\n\n\n```\n\nq\n",
+		"para\n\n```\n\nx\n```\n",
+		"# h\n\n```\n\ncode\n```\n",
+		// Escapes riding in from the diff.
+		"a \x1b[2J b\n",
+		"a \x1bc b\n",
+		"```\n\x1b]0;t\x07\n```\n",
+		escapeSink,
+		// Front matter is the one block that can hold blank lines of its own.
+		"---\ntitle: x\n\n\n\nname: y\n---\n\nbody\n",
+		"---\n\n\n\n---\n\nbody\n",
 	}
 	for _, src := range inputs {
 		for _, color := range []bool{false, true} {
-			for _, width := range []int{-1, 0, 1, 3, 20} {
+			for _, width := range []int{-1, 0, 1, 3, 20, 80} {
 				opts := Options{Width: width, Color: color}
-				out := Render(src, opts)
+				out := Render(src, opts) // I1: getting here at all is the claim
 				switch {
 				case src == "" && out != "":
 					t.Errorf("Render(%q) = %q, want the empty string", src, out)
-				case src != "" && !strings.HasSuffix(out, "\n"):
+				// I2. An input that draws nothing renders as nothing, and
+				// only a non-empty result has an end to punctuate.
+				case out != "" && !strings.HasSuffix(out, "\n"):
 					t.Errorf("Render(%q, width=%d) = %q, want it to end with a newline", src, width, out)
 				case strings.HasSuffix(out, "\n\n"):
 					t.Errorf("Render(%q, width=%d) = %q, want no blank line at the end", src, width, out)
-				case out != "\n" && strings.HasPrefix(out, "\n"):
+				case strings.HasPrefix(out, "\n"):
 					t.Errorf("Render(%q, width=%d) = %q, want no blank line at the start", src, width, out)
+				// I3. Two blank lines in a row are a gap the author did not
+				// ask for, wherever in the document they turn up.
+				case strings.Contains(out, "\n\n\n"):
+					t.Errorf("Render(%q, width=%d) = %q, want no two blank lines in a row", src, width, out)
 				}
-				if got, want := Lines(src, opts), strings.Split(strings.TrimSuffix(out, "\n"), "\n"); out != "" && !slices.Equal(got, want) {
+				// I4. Lines is Render split, including when there is nothing
+				// to split.
+				got := Lines(src, opts)
+				if out == "" {
+					if len(got) != 0 {
+						t.Errorf("Lines(%q, width=%d) = %q, want no lines", src, width, got)
+					}
+				} else if want := strings.Split(strings.TrimSuffix(out, "\n"), "\n"); !slices.Equal(got, want) {
 					t.Errorf("Lines(%q) = %q, want %q", src, got, want)
+				}
+				// I5 and I6. What may appear in the output depends on Color,
+				// and neither answer includes anything the input brought.
+				if color {
+					checkKnownEscapes(t, fmt.Sprintf("Render(%q, width=%d, color)", src, width), out)
+				} else if strings.Contains(out, "\x1b") {
+					t.Errorf("Render(%q, width=%d) = %q, want no escape at all", src, width, out)
 				}
 			}
 		}
 	}
+}
+
+// Fences keep the lines their author put in them. A blank line inside one is a
+// row of the code, not the gap between two blocks, and the difference is what
+// the indent on an otherwise empty line records.
+func TestFenceKeepsBlankLines(t *testing.T) {
+	tests := []struct {
+		name string
+		src  string
+		want string
+	}{
+		{"a fence opening on a blank line", "```\n\na\n```\n", "  \n  a\n"},
+		{"a fence closing on a blank line", "```\na\n\n```\n", "  a\n  \n"},
+		{"blank rows between two paragraphs", "p\n\n```\n\n\n```\n\nq\n", "p\n\n  \n  \n\nq\n"},
+		{"a paragraph then a fence opening blank", "para\n\n```\n\nx\n```\n", "para\n\n  \n  x\n"},
+		{"a heading then a fence opening blank", "# h\n\n```\n\ncode\n```\n", "h\n=\n\n  \n  code\n"},
+		{"newlines alone draw nothing", "\n\n\n", ""},
+		{"whitespace alone draws nothing", "   \n\t\n", ""},
+		{"an empty fence draws nothing", "```\n```\n", ""},
+		{"front matter with nothing in it draws nothing", "---\n---\n", ""},
+	}
+	for _, tt := range tests {
+		check(t, tt.name, Render(tt.src, Options{Width: 40}), tt.want)
+	}
+}
+
+// Width has a ceiling, so a number that came from a broken ioctl or a config
+// file cannot ask for a line the size of the machine's memory.
+func TestWidthIsClamped(t *testing.T) {
+	for _, width := range []int{4097, 100000000, 2147483647} {
+		out := Render("---\n", Options{Width: width})
+		line, _, _ := strings.Cut(out, "\n")
+		if len(line) != maxWidth {
+			t.Errorf("Render(rule, width=%d) drew a line of %d bytes, want %d", width, len(line), maxWidth)
+		}
+	}
+}
+
+// renderSink keeps the compiler from deciding a rendered document nobody reads
+// need not be built.
+var renderSink string
+
+// longParagraph is n lines of prose with no blank line anywhere in it, which is
+// how a release note or a design doc pasted into a review arrives. Each line is
+// 26 bytes with its newline, so 72000 of them is the 1.8MB document the QA of
+// this package timed at 12 seconds.
+func longParagraph(n int) string {
+	return strings.Repeat("lorem ipsum dolor sit ame\n", n)
+}
+
+// Joining a paragraph has to cost what the paragraph costs, not its square.
+//
+// Allocation is measured rather than time because it is the quantity that says
+// which of the two shapes the code has: growing a string with += copies the
+// whole run once per line, so four times the input allocates about sixteen
+// times the bytes, while a Builder allocates about four.
+func TestParagraphJoinIsLinear(t *testing.T) {
+	measure := func(lines int) uint64 {
+		src := longParagraph(lines)
+		runtime.GC()
+		var before, after runtime.MemStats
+		runtime.ReadMemStats(&before)
+		renderSink = Render(src, Options{Width: 80})
+		runtime.ReadMemStats(&after)
+		return after.TotalAlloc - before.TotalAlloc
+	}
+	small := measure(2000)
+	large := measure(8000)
+	if small == 0 {
+		t.Fatal("rendering 2000 lines allocated nothing, so nothing was measured")
+	}
+	t.Logf("2000 lines: %d bytes, 8000 lines: %d bytes, ratio %.2f", small, large, float64(large)/float64(small))
+	if large > small*8 {
+		t.Errorf("four times the input allocated %.1f times the bytes (%d -> %d); linear is about 4 and quadratic about 16",
+			float64(large)/float64(small), small, large)
+	}
+}
+
+// The wall clock behind TestParagraphJoinIsLinear, off by default because the
+// numbers a shared machine gives are not numbers to fail a build on.
+func TestParagraphPerformance(t *testing.T) {
+	if os.Getenv("MDTERM_PERF") != "1" {
+		t.Skip("set MDTERM_PERF=1 to time the renderer")
+	}
+	cases := []struct {
+		name  string
+		lines int
+		limit time.Duration
+	}{
+		{"1000 lines", 1000, 0},
+		{"4000 lines", 4000, 0},
+		{"16000 lines", 16000, 1000 * time.Millisecond},
+		{"1.8MB", 72000, 3000 * time.Millisecond},
+	}
+	for _, c := range cases {
+		src := longParagraph(c.lines)
+		start := time.Now()
+		renderSink = Render(src, Options{Width: 80})
+		elapsed := time.Since(start)
+		t.Logf("%s (%d bytes): %d ms", c.name, len(src), elapsed.Milliseconds())
+		if c.limit > 0 && elapsed > c.limit {
+			t.Errorf("%s took %d ms, want at most %d ms", c.name, elapsed.Milliseconds(), c.limit.Milliseconds())
+		}
+	}
+}
+
+// The one test that puts the output in front of a real terminal.
+//
+// Every other claim here is made about a Go string, and a Go string can be
+// checked through a pipe - which is exactly how the escapes got through the
+// last time: the check ran, the terminal was never involved, and the bytes that
+// would have cleared the screen were never looked at. This writes the rendered
+// fixture to stdout so a pty can be put in front of it and the bytes counted
+// on the far side.
+func TestPTYPlainOutputIsInert(t *testing.T) {
+	if os.Getenv("MDTERM_PTY") != "1" {
+		t.Skip("set MDTERM_PTY=1 and attach a pty to check the output on a real terminal")
+	}
+	escapeSinkMustBite(t)
+	out := Render(escapeSink, Options{Width: 40})
+	if out == "" {
+		t.Fatal("the fixture rendered to nothing, so the terminal would be handed nothing")
+	}
+	fmt.Fprint(os.Stdout, "---MDTERM-BEGIN---")
+	fmt.Fprint(os.Stdout, out)
+	fmt.Fprint(os.Stdout, "---MDTERM-END---")
 }
