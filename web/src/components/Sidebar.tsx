@@ -289,7 +289,7 @@ export function Sidebar({
         </div>
       ))}
 
-      {status && status.groups.length > 1 && (
+      {status && status.groups.some((g) => g.name !== group) && (
         <div className="groups">
           <div className="groups-title">Groups</div>
           <ul>
