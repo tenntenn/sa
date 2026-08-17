@@ -2,21 +2,19 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'rea
 import { groupFromLocation } from './api'
 import { client } from './client'
 import { readSetting, writeSetting } from './storage'
-import type { Comment, Diff, FileDiff, Status, Verdict } from './types'
-import { DiffView } from './components/DiffView'
+import type { Comment, Diff, FileDiff, PreviewKind, Status, ViewMode, Verdict } from './types'
+import { DiffFileSection } from './components/DiffFileSection'
+import { DiffStack, type DiffStackHandle, type ScrollFraction } from './components/DiffStack'
 import { Divider } from './components/Divider'
 import { Icon } from './components/Icon'
-import { PreviewPane } from './components/PreviewPane'
+import { PreviewFileSection } from './components/PreviewFileSection'
+import { PreviewStack } from './components/PreviewStack'
 import { Sidebar } from './components/Sidebar'
 import { clampRatio, SplitPane, SPLIT_DEFAULT } from './components/SplitPane'
 import { useNarrowLayout } from './useMediaQuery'
 import { plainKey, shortcuts, typingInto } from './shortcuts'
 import { applyTheme, storedTheme, type Theme } from './theme'
-
-interface Selected {
-  diffId: string
-  fileId: string
-}
+import { sectionKey } from './sectionKey'
 
 /** Pane names the three panes, which a phone shows one at a time. */
 type Pane = 'files' | 'diff' | 'preview'
@@ -29,6 +27,7 @@ const SIDEBAR_SNAP = 48
 const SIDEBAR_STEP = 24
 const SIDEBAR_KEY = 'sbnn.sidebar.width'
 const SPLIT_KEY = 'sbnn.split'
+const PREVIEW_KIND_KEY = 'sbnn.preview.renderer'
 
 function storedSplitRatio(): number {
   const stored = readSetting(SPLIT_KEY)
@@ -47,6 +46,10 @@ function storedSidebarWidth(): number {
   return Number.isFinite(width) && width >= 0 && width <= SIDEBAR_MAX ? width : SIDEBAR_DEFAULT
 }
 
+function storedPreviewKind(): PreviewKind {
+  return readSetting(PREVIEW_KIND_KEY) === 'mo' ? 'mo' : 'preview'
+}
+
 export function App() {
   const group = useMemo(() => (client.isStatic ? staticGroupName() : groupFromLocation()), [])
   const narrow = useNarrowLayout()
@@ -55,7 +58,19 @@ export function App() {
   const [reviewedAt, setReviewedAt] = useState<string | null>(null)
   const [reviewVerdict, setReviewVerdict] = useState<Verdict | null>(null)
   const [status, setStatus] = useState<Status | null>(null)
-  const [selected, setSelected] = useState<Selected | null>(null)
+  // activeKey is the file the reader is currently looking at: on a phone
+  // the one file shown, on a wide screen whichever the diff pane has been
+  // scrolled to. It is a diffId:fileId pair, not a bare fileId - a fileId is
+  // only unique within the round it came from, so two rounds that both
+  // touch the same path as their Nth file share one.
+  const [activeKey, setActiveKey] = useState<string | null>(null)
+  const [foldOverrides, setFoldOverrides] = useState<Map<string, boolean>>(() => new Map())
+  const [viewModeOverrides, setViewModeOverrides] = useState<Map<string, ViewMode>>(() => new Map())
+  // viewModeDefault is every file's view mode until its own toggle says
+  // otherwise; null respects each file's own server-picked default (added
+  // files unified, most modified files split) rather than forcing one.
+  const [viewModeDefault, setViewModeDefault] = useState<ViewMode | null>(null)
+  const [scrollFraction, setScrollFraction] = useState<ScrollFraction | null>(null)
   const [splitRatio, setSplitRatio] = useState(storedSplitRatio)
   const [pane, setPane] = useState<Pane>('diff')
   const [error, setError] = useState<string | null>(null)
@@ -65,21 +80,21 @@ export function App() {
   const [reviewNote, setReviewNote] = useState<string | null>(null)
   const [help, setHelp] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
-  // foldNudge and viewNudge are how a key reaches the file on screen: the
-  // view owns that state, and a counter is a message it cannot miss.
-  const [foldNudge, setFoldNudge] = useState(0)
-  const [viewNudge, setViewNudge] = useState(0)
   const [sidebarWidth, setSidebarWidth] = useState(storedSidebarWidth)
   const [theme, setTheme] = useState<Theme>(storedTheme)
   const [query, setQuery] = useState('')
-  // Scrolling the diff moves the preview with it, as a fraction of the way
-  // down rather than by line: the two documents do not agree on lines, and
-  // pretending they do lands the reader in the wrong place with more
-  // confidence. It is off the moment the reader says so, and the reader
-  // says so simply by scrolling the preview themselves.
+  const [previewKind, setPreviewKind] = useState<PreviewKind>(storedPreviewKind)
+  // Scrolling the diff moves the preview with it, to the same file and the
+  // same fraction into that file's own section, rather than by line: the
+  // two documents do not agree on lines, and pretending they do lands the
+  // reader in the wrong place with more confidence. It is off the moment
+  // the reader says so, and the reader says so simply by scrolling the
+  // preview themselves.
   const [syncScroll, setSyncScroll] = useState(true)
-  const [scrollTo, setScrollTo] = useState<number | null>(null)
   const bodyRef = useRef<HTMLDivElement>(null)
+  const diffScrollRef = useRef<HTMLDivElement>(null)
+  const previewScrollRef = useRef<HTMLDivElement>(null)
+  const diffStackRef = useRef<DiffStackHandle>(null)
   const searchRef = useRef<HTMLInputElement>(null)
   const settingsRef = useRef<HTMLDivElement>(null)
 
@@ -100,6 +115,10 @@ export function App() {
   useEffect(() => {
     writeSetting(SIDEBAR_KEY, String(sidebarWidth))
   }, [sidebarWidth])
+
+  useEffect(() => {
+    writeSetting(PREVIEW_KIND_KEY, previewKind)
+  }, [previewKind])
 
   const resizeSidebar = useCallback((clientX: number) => {
     const rect = bodyRef.current?.getBoundingClientRect()
@@ -141,39 +160,69 @@ export function App() {
     })
   }, [group, reload])
 
-  // Keep a file selected: the newest diff is what the reviewer just sent.
+  // Every file, in every round, keyed by the pair a comment or an override
+  // already has to use.
+  const filesByKey = useMemo(() => {
+    const map = new Map<string, { diff: Diff; file: FileDiff }>()
+    for (const d of diffs) {
+      for (const f of d.files) map.set(sectionKey(d.id, f.id), { diff: d, file: f })
+    }
+    return map
+  }, [diffs])
+
+  const flatKeys = useMemo(
+    () => diffs.flatMap((d) => d.files.map((f) => sectionKey(d.id, f.id))),
+    [diffs],
+  )
+
+  // Keep a file active: the newest diff is what the reviewer just sent. On
+  // a wide screen this is only the starting point - scrolling the diff pane
+  // takes over from here (see DiffStack's onActiveChange below).
   useEffect(() => {
     if (diffs.length === 0) {
-      setSelected(null)
+      setActiveKey(null)
       return
     }
-    setSelected((current) => {
-      if (current) {
-        const diff = diffs.find((d) => d.id === current.diffId)
-        if (diff && diff.files.some((f) => f.id === current.fileId)) return current
+    setActiveKey((current) => {
+      if (current && diffs.some((d) => d.files.some((f) => sectionKey(d.id, f.id) === current))) {
+        return current
       }
       const last = diffs[diffs.length - 1]
       const file = last.files[0]
-      return file ? { diffId: last.id, fileId: file.id } : null
+      return file ? sectionKey(last.id, file.id) : null
     })
   }, [diffs])
 
-  const selectedDiff: Diff | null = selected
-    ? (diffs.find((d) => d.id === selected.diffId) ?? null)
-    : null
-  const selectedFile: FileDiff | null =
-    selectedDiff && selected
-      ? (selectedDiff.files.find((f) => f.id === selected.fileId) ?? null)
-      : null
-  const fileComments = useMemo(
-    () =>
-      selected
-        ? comments.filter((c) => c.diffId === selected.diffId && c.fileId === selected.fileId)
-        : [],
-    [comments, selected],
+  const activeEntry = activeKey ? filesByKey.get(activeKey) : undefined
+  const activeComments = useMemo(
+    () => (activeKey ? comments.filter((c) => sectionKey(c.diffId, c.fileId) === activeKey) : []),
+    [comments, activeKey],
   )
   const openComments = comments.filter((c) => !c.resolved).length
   const fileCount = diffs.reduce((total, diff) => total + diff.files.length, 0)
+
+  const setFolded = useCallback((key: string, value: boolean) => {
+    setFoldOverrides((prev) => {
+      const next = new Map(prev)
+      next.set(key, value)
+      return next
+    })
+  }, [])
+
+  const setViewModeFor = useCallback((key: string, mode: ViewMode) => {
+    setViewModeOverrides((prev) => {
+      const next = new Map(prev)
+      next.set(key, mode)
+      return next
+    })
+  }, [])
+
+  // Setting the default for every file at once starts clean: a file toggled
+  // on its own before this would otherwise keep ignoring it.
+  const setViewModeDefaultFor = useCallback((mode: ViewMode) => {
+    setViewModeDefault(mode)
+    setViewModeOverrides(new Map())
+  }, [])
 
   const copyPrompt = async () => {
     try {
@@ -227,45 +276,44 @@ export function App() {
     }
   }
 
-  // The file list as one sequence, which is what "next file" means.
-  const flatFiles = useMemo(
-    () => diffs.flatMap((d) => d.files.map((f) => ({ diffId: d.id, fileId: f.id }))),
-    [diffs],
+  const goToKey = useCallback(
+    (key: string) => {
+      setActiveKey(key)
+      if (narrow) setPane('diff')
+      else diffStackRef.current?.scrollToSection(key)
+    },
+    [narrow],
   )
 
   const stepFile = useCallback(
     (by: number) => {
-      if (flatFiles.length === 0) return
-      const at = flatFiles.findIndex(
-        (f) => f.diffId === selected?.diffId && f.fileId === selected.fileId,
-      )
-      const next = flatFiles[Math.min(flatFiles.length - 1, Math.max(0, at + by))]
-      if (next) {
-        setSelected(next)
-        if (narrow) setPane('diff')
-      }
+      if (flatKeys.length === 0) return
+      const at = activeKey ? flatKeys.indexOf(activeKey) : -1
+      const next = flatKeys[Math.min(flatKeys.length - 1, Math.max(0, at + by))]
+      if (next) goToKey(next)
     },
-    [flatFiles, selected, narrow],
+    [flatKeys, activeKey, goToKey],
   )
 
   // Comments are what a review is for, so stepping through them is stepping
   // through the review rather than through the files: the next one may be
-  // in another file, and going there is the point.
+  // in another file, and going there is the point. Every file's comments
+  // are on the page at once now, so landing on the right one is a direct
+  // scrollIntoView rather than a guess at "the first .comment on screen".
   const stepComment = useCallback(
     (by: number) => {
       const open = comments.filter((c) => !c.resolved)
       if (open.length === 0) return
-      const at = open.findIndex((c) => c.diffId === selected?.diffId && c.fileId === selected.fileId)
+      const at = activeKey ? open.findIndex((c) => sectionKey(c.diffId, c.fileId) === activeKey) : -1
       const index = at < 0 ? (by > 0 ? 0 : open.length - 1) : at + by
       const target = open[(index + open.length) % open.length]
       if (!target) return
-      setSelected({ diffId: target.diffId, fileId: target.fileId })
-      if (narrow) setPane('diff')
+      goToKey(sectionKey(target.diffId, target.fileId))
       window.setTimeout(() => {
-        document.querySelector('.comment')?.scrollIntoView({ block: 'center' })
+        document.getElementById(`comment-${target.id}`)?.scrollIntoView({ block: 'center' })
       }, 50)
     },
-    [comments, selected, narrow],
+    [comments, activeKey, goToKey],
   )
 
   // One place where every key is answered. Each is a single unmodified
@@ -298,12 +346,21 @@ export function App() {
         case '/':
           focusSearch()
           break
-        case 'f':
-          setFoldNudge((n) => n + 1)
+        case 'f': {
+          if (!activeKey) break
+          const entry = filesByKey.get(activeKey)
+          const current = foldOverrides.get(activeKey) ?? Boolean(entry?.file.folded)
+          setFolded(activeKey, !current)
           break
-        case 'v':
-          setViewNudge((n) => n + 1)
+        }
+        case 'v': {
+          if (!activeKey) break
+          const entry = filesByKey.get(activeKey)
+          if (!entry) break
+          const current = viewModeOverrides.get(activeKey) ?? viewModeDefault ?? entry.file.viewMode
+          setViewModeFor(activeKey, current === 'split' ? 'unified' : 'split')
           break
+        }
         case 's':
           setSyncScroll((on) => !on)
           break
@@ -320,14 +377,19 @@ export function App() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [stepFile, stepComment, focusSearch, diffs.length])
-
-  const selectFile = (diffId: string, fileId: string) => {
-    setSelected({ diffId, fileId })
-    // On a phone the file list covers the screen, so picking a file means
-    // "show me this diff".
-    if (narrow) setPane('diff')
-  }
+  }, [
+    stepFile,
+    stepComment,
+    focusSearch,
+    diffs.length,
+    activeKey,
+    filesByKey,
+    foldOverrides,
+    viewModeOverrides,
+    viewModeDefault,
+    setFolded,
+    setViewModeFor,
+  ])
 
   const sidebar = (
     <Sidebar
@@ -336,8 +398,9 @@ export function App() {
       diffs={diffs}
       comments={comments}
       status={status}
-      selected={selected}
-      onSelect={selectFile}
+      activeKey={activeKey}
+      activeDiffId={activeEntry?.diff.id ?? null}
+      onSelect={(diffId, fileId) => goToKey(sectionKey(diffId, fileId))}
       onChanged={() => void reload()}
       query={query}
       onQuery={setQuery}
@@ -345,36 +408,73 @@ export function App() {
     />
   )
 
-  const diffPane =
-    selectedDiff && selectedFile ? (
-      <DiffView
-        // The server picks split or unified per file, and that choice is
-        // the initial state of the view; without a key React keeps the
-        // first file's state for every file after it.
-        key={selectedFile.id}
+  const previewForced = narrow || client.isStatic
+  const resolvedPreviewKind: PreviewKind = previewForced ? 'preview' : previewKind
+
+  const diffPane = narrow ? (
+    activeEntry ? (
+      <DiffFileSection
+        key={activeKey}
         group={group}
-        diff={selectedDiff}
-        file={selectedFile}
-        comments={fileComments}
-        narrow={narrow}
+        diff={activeEntry.diff}
+        file={activeEntry.file}
+        comments={activeComments}
+        narrow
         onChanged={() => void reload()}
-        foldNudge={foldNudge}
-        viewNudge={viewNudge}
+        folded={
+          (foldOverrides.get(activeKey!) ?? Boolean(activeEntry.file.folded)) && activeComments.length === 0
+        }
+        onSetFolded={(value) => setFolded(activeKey!, value)}
+        viewMode={viewModeOverrides.get(activeKey!) ?? viewModeDefault ?? activeEntry.file.viewMode}
+        onSetViewMode={(mode) => setViewModeFor(activeKey!, mode)}
       />
     ) : (
       <p className="empty">Select a file.</p>
     )
-
-  const previewPane = (
-    <PreviewPane
+  ) : (
+    <DiffStack
+      ref={diffStackRef}
       group={group}
-      diffId={selectedDiff?.id ?? null}
-      file={selectedFile}
+      diffs={diffs}
+      comments={comments}
+      foldOverrides={foldOverrides}
+      viewModeOverrides={viewModeOverrides}
+      viewModeDefault={viewModeDefault}
+      onSetFolded={setFolded}
+      onSetViewMode={setViewModeFor}
+      onSetViewModeDefault={setViewModeDefaultFor}
+      onChanged={() => void reload()}
+      containerRef={diffScrollRef}
+      onActiveChange={setActiveKey}
+      onScrollFraction={setScrollFraction}
+    />
+  )
+
+  const previewPane = narrow ? (
+    activeEntry ? (
+      <PreviewFileSection
+        group={group}
+        diffId={activeEntry.diff.id}
+        file={activeEntry.file}
+        status={status}
+        kind={resolvedPreviewKind}
+        active
+      />
+    ) : (
+      <p className="empty">Select a file.</p>
+    )
+  ) : (
+    <PreviewStack
+      group={group}
+      diffs={diffs}
       status={status}
-      narrow={narrow}
-      scrollTo={syncScroll ? scrollTo : null}
+      containerRef={previewScrollRef}
+      scrollTarget={syncScroll ? scrollFraction : null}
       sync={syncScroll}
       onSync={setSyncScroll}
+      kind={resolvedPreviewKind}
+      forced={previewForced}
+      onSetKind={setPreviewKind}
     />
   )
 
@@ -542,14 +642,14 @@ export function App() {
             onClick={() => setPane('diff')}
           >
             Diff
-            {fileComments.length > 0 && <span className="tab-count">{fileComments.length}</span>}
+            {activeComments.length > 0 && <span className="tab-count">{activeComments.length}</span>}
           </button>
           <button
             className={pane === 'preview' ? 'active' : ''}
             aria-pressed={pane === 'preview'}
             onClick={() => setPane('preview')}
-            disabled={!selectedFile?.isMarkdown}
-            title={selectedFile?.isMarkdown ? undefined : 'Only Markdown files have a preview'}
+            disabled={!activeEntry?.file.isMarkdown}
+            title={activeEntry?.file.isMarkdown ? undefined : 'Only Markdown files have a preview'}
           >
             Preview
           </button>
@@ -684,7 +784,8 @@ export function App() {
                 onRatioChange={setSplitRatio}
                 left={diffPane}
                 right={previewPane}
-                onLeftScroll={syncScroll ? setScrollTo : undefined}
+                leftRef={diffScrollRef}
+                rightRef={previewScrollRef}
               />
             )}
           </main>
