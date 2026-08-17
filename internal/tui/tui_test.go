@@ -9,7 +9,7 @@ func TestDumpWritesOneLinePerRow(t *testing.T) {
 	s := newTestState(t, twoFiles)
 
 	var b strings.Builder
-	if err := Dump(&b, s.Files, 60, 12); err != nil {
+	if err := Dump(&b, s.Files, 60, 12, Session{}); err != nil {
 		t.Fatalf("Dump: %v", err)
 	}
 	out := b.String()
@@ -28,7 +28,7 @@ func TestDumpWritesOneLinePerRow(t *testing.T) {
 
 	// No size means the default one, which is what --dump promises.
 	b.Reset()
-	if err := Dump(&b, s.Files, 0, 0); err != nil {
+	if err := Dump(&b, s.Files, 0, 0, Session{}); err != nil {
 		t.Fatalf("Dump: %v", err)
 	}
 	if got := strings.Count(b.String(), "\n"); got != DefaultHeight {

@@ -57,6 +57,11 @@ func (p palette) Paint(s *State, width, height int) []string {
 		return nil
 	}
 	listWidth, _ := paneWidths(width)
+	// Green and red mean added and deleted, and in a preview they would mean
+	// neither: a bullet opens with the same "-" a deleted line does, and a
+	// list of pros and cons would come out coloured like a diff of itself.
+	// The pane is showing the file, so the marker is just a character.
+	colourDiff := s.View == ViewDiff
 	out := make([]string, len(lines))
 	for i, line := range lines {
 		switch {
@@ -65,7 +70,7 @@ func (p palette) Paint(s *State, width, height int) []string {
 		case i == len(lines)-1:
 			out[i] = p.wrap(sgrFaint, line)
 		default:
-			out[i] = p.styleBody(line, listWidth)
+			out[i] = p.styleBody(line, listWidth, colourDiff)
 		}
 	}
 	return out
@@ -82,11 +87,19 @@ func (p palette) wrap(sgr, text string) string {
 }
 
 // styleBody colours one body line without changing a character of it: the
-// file column, the rule, and the diff column are styled where Frame put them.
+// file column, the rule, and the right column are styled where Frame put them.
 // The columns are found by counting cells, which is where Frame put them too.
-func (p palette) styleBody(line string, listWidth int) string {
+// colourDiff says whether the right column is a diff; when it is not, it is
+// the text of a file and none of its lines are added or deleted.
+func (p palette) styleBody(line string, listWidth int, colourDiff bool) string {
+	right := func(text string) string {
+		if !colourDiff {
+			return text
+		}
+		return p.wrap(diffStyle(text), text)
+	}
 	if listWidth <= 0 {
-		return p.wrap(diffStyle(line), line)
+		return right(line)
 	}
 	if cellWidth(line) <= listWidth {
 		return p.wrap(fileStyle(line), line)
@@ -96,7 +109,7 @@ func (p palette) styleBody(line string, listWidth int) string {
 	if strings.HasPrefix(rest, separator) {
 		sep, diff = separator, rest[len(separator):]
 	}
-	return p.wrap(fileStyle(list), list) + sep + p.wrap(diffStyle(diff), diff)
+	return p.wrap(fileStyle(list), list) + sep + right(diff)
 }
 
 // fileStyle picks out the selected file, which FileListLines marks with "> ".
