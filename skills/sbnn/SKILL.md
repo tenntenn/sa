@@ -12,6 +12,12 @@ the command line. sbnn never runs git itself: it reads the diff from stdin, so
 it works with `git diff`, `jj diff`, `diff -u`, a `.patch` file, or a diff
 you produced yourself.
 
+Two words recur below and mean different sizes: a **group** — what
+`--target` names — is the whole review, with its own URL, its own comments
+and its own history. A **round** is one diff sent into a group. Sending a
+second diff into the same group starts its next round; it does not start a
+new review.
+
 ## When to use this
 
 - You changed code and want a human to look at it before continuing.
@@ -82,6 +88,20 @@ git diff --cached | sbnn --target <topic>   # staged changes
 diff -u old.txt new.txt | sbnn --target <topic>
 cat change.patch | sbnn --target <topic>
 ```
+
+**Reviewing one branch of a stack of pull requests.** Give each branch its
+own target, and diff it against the branch below it rather than against
+main, so the group holds only that PR's own change:
+
+```
+git diff origin/main...feature-1 | sbnn --target feature-1 --label pr=101
+git diff feature-1...feature-2   | sbnn --target feature-2 --label pr=102
+```
+
+`--label` carries the PR number or URL into `sbnn reviews` for later, and is
+worth passing when you have it. None of this is required — sbnn does not
+know what GitHub or a stack is — it is only the shape that keeps one group
+lined up with one PR.
 
 sbnn prints the review URL and returns immediately; the server keeps running in
 the background. Running `sbnn` again adds another diff to the same page rather

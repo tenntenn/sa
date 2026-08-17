@@ -59,17 +59,17 @@ export function Sidebar({
   const commentCount = (diffId: string, fileId: string) =>
     comments.filter((c) => c.diffId === diffId && c.fileId === fileId && !c.resolved).length
 
-  // A shut group still says how much is waiting inside it.
-  const groupComments = (diff: Diff): number =>
+  // A shut round still says how much is waiting inside it.
+  const roundComments = (diff: Diff): number =>
     comments.filter((c) => c.diffId === diff.id && !c.resolved).length
 
   // Rounds pile up: a review of four diffs is four headings and everything
-  // under them. A group can be shut, and the whole list can be turned into
+  // under them. A round can be shut, and the whole list can be turned into
   // tabs, which shows one round at a time.
   const [layout, setLayout] = useState<Layout>(
     () => (readSetting(LAYOUT_KEY) === 'tabs' ? 'tabs' : 'list'),
   )
-  const [shutGroups, setShutGroups] = useState<Set<string>>(() => new Set())
+  const [shutRounds, setShutRounds] = useState<Set<string>>(() => new Set())
   const [tab, setTab] = useState<string | null>(null)
 
   useEffect(() => {
@@ -105,12 +105,12 @@ export function Sidebar({
     return true
   }
   // A search opens every round it matched: a match hidden inside a shut
-  // group is a match nobody sees.
+  // round is a match nobody sees.
   const isShut = (diff: Diff): boolean =>
-    layout === 'list' && !searching && shutGroups.has(diff.id)
+    layout === 'list' && !searching && shutRounds.has(diff.id)
 
-  const toggleGroup = (id: string) =>
-    setShutGroups((current) => {
+  const toggleRound = (id: string) =>
+    setShutRounds((current) => {
       const next = new Set(current)
       if (next.has(id)) next.delete(id)
       else next.add(id)
@@ -200,7 +200,7 @@ export function Sidebar({
                   {shown(diff).length}
                 </span>
               )}
-              {groupComments(diff) > 0 && <span className="badge sm warn">{groupComments(diff)}</span>}
+              {roundComments(diff) > 0 && <span className="badge sm warn">{roundComments(diff)}</span>}
               {!client.isStatic && diff.id === activeTab && (
                 <span
                   className="tab-remove"
@@ -222,24 +222,24 @@ export function Sidebar({
       {searching && found === 0 && <p className="empty">No path contains that.</p>}
 
       {diffs.map((diff) => (
-        <div className="diff-group" key={diff.id} hidden={!visible(diff)}>
-          <div className="diff-group-header" hidden={layout === 'tabs'}>
+        <div className="diff-round" key={diff.id} hidden={!visible(diff)}>
+          <div className="diff-round-header" hidden={layout === 'tabs'}>
             {layout === 'list' ? (
               <button
-                className="diff-group-title as-button"
+                className="diff-round-title as-button"
                 title={new Date(diff.createdAt).toLocaleString()}
                 aria-expanded={!isShut(diff)}
-                onClick={() => toggleGroup(diff.id)}
+                onClick={() => toggleRound(diff.id)}
               >
                 <span className="disclosure">{isShut(diff) ? '▸' : '▾'}</span>
                 {diff.title}
                 <span className="hint">{shown(diff).length}</span>
-                {groupComments(diff) > 0 && (
-                  <span className="badge sm warn">{groupComments(diff)}</span>
+                {roundComments(diff) > 0 && (
+                  <span className="badge sm warn">{roundComments(diff)}</span>
                 )}
               </button>
             ) : (
-              <span className="diff-group-title" title={new Date(diff.createdAt).toLocaleString()}>
+              <span className="diff-round-title" title={new Date(diff.createdAt).toLocaleString()}>
                 {diff.title}
               </span>
             )}
