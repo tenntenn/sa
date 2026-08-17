@@ -1,96 +1,50 @@
-import { useEffect, useRef, useState } from 'react'
-import type { FileDiff, Status } from '../types'
+import { useEffect, useState } from 'react'
+import type { FileDiff, PreviewKind, Status } from '../types'
 import { filePath } from '../types'
 import { client, type PreviewResult } from '../client'
-import { readSetting, writeSetting } from '../storage'
 import { Icon } from './Icon'
 import { MoIcon } from './MoIcon'
 
 interface Props {
   group: string
-  diffId: string | null
-  file: FileDiff | null
+  diffId: string
+  file: FileDiff
   status: Status | null
-  /** narrow is set on a phone, where mo's own layout has no room. */
-  narrow?: boolean
-  /** scrollTo is the fraction of the diff that has been scrolled past, or
-   * null when the diff is not driving the preview. */
-  scrollTo?: number | null
-  /** sync is whether the preview is following the diff, and onSync turns
-   * that off and on where the reader is looking. */
-  sync?: boolean
-  onSync?: (on: boolean) => void
+  kind: PreviewKind
+  /** active gates the fetch: a section far from the viewport has no reason
+   * to ask the server (or, worse, mo) to render it yet. Once true it stays
+   * true, so scrolling back to an already-loaded file never refetches it. */
+  active: boolean
+  /** onUserScroll fires when the reader scrolls this section themselves,
+   * which is what turns following the diff off. */
+  onUserScroll?: () => void
 }
 
-/** PreviewKind is which of the two previews is showing. sbnn renders one
- * itself; mo is the other, richer one, in a frame. */
-export type PreviewKind = 'preview' | 'mo'
-
-const RENDERER_KEY = 'sbnn.preview.renderer'
-
 /**
- * PreviewPane shows the Markdown preview next to the diff.
+ * PreviewFileSection shows one file's Markdown preview.
  *
  * In the live app the preview is rendered by mo. mo forbids framing with
  * "frame-ancestors 'none'", so sbnn serves it through its own loopback proxy,
  * which relaxes that one directive for sbnn's origin. An exported page has no
  * mo behind it and renders the frozen Markdown itself.
- *
- * A phone does the same: mo keeps its own sidebar inside the frame, which
- * would leave a column too narrow to read, so the Markdown is rendered here
- * and mo is one tap away in its own window.
  */
-export function PreviewPane({
-  group,
-  diffId,
-  file,
-  status,
-  narrow = false,
-  scrollTo = null,
-  sync = false,
-  onSync,
-}: Props) {
+export function PreviewFileSection({ group, diffId, file, status, kind, active, onUserScroll }: Props) {
   const [preview, setPreview] = useState<PreviewResult | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [reloadKey, setReloadKey] = useState(0)
   const [openingMo, setOpeningMo] = useState(false)
 
-  // Which preview to use is the reader's to choose. sbnn's own is the
-  // default: it needs nothing installed, it follows the diff as it scrolls,
-  // and it is drawn in this page rather than in a frame. mo renders more,
-  // and is one click away. A phone and an exported page have no embedded mo
-  // to choose between.
-  const [chosen, setChosen] = useState<PreviewKind>(
-    () => (readSetting(RENDERER_KEY) === 'mo' ? 'mo' : 'preview'),
-  )
-  const forced = narrow || client.isStatic
-  const kind: PreviewKind = forced ? 'preview' : chosen
-  const previewable = file !== null && file.isMarkdown && diffId !== null
   const renderHere = kind === 'preview'
-  const body = useRef<HTMLDivElement>(null)
+  const previewable = file.isMarkdown
 
   useEffect(() => {
-    writeSetting(RENDERER_KEY, kind)
-  }, [kind])
-
-  // Follow the diff. Only the preview rendered here can be moved: mo is
-  // framed from another origin, where a page may not touch its scrolling.
-  useEffect(() => {
-    if (scrollTo === null || renderHere !== true) return
-    const el = body.current
-    if (!el) return
-    const room = el.scrollHeight - el.clientHeight
-    if (room <= 0) return
-    el.scrollTop = room * scrollTo
-  }, [scrollTo, renderHere, preview])
-
-  useEffect(() => {
-    if (!previewable || !file || !diffId) {
+    if (!previewable) {
       setPreview(null)
       setError(null)
       return
     }
+    if (!active) return
     let cancelled = false
     setLoading(true)
     setError(null)
@@ -113,12 +67,10 @@ export function PreviewPane({
     return () => {
       cancelled = true
     }
-  }, [group, diffId, file, previewable, renderHere, reloadKey])
+  }, [group, diffId, file, previewable, renderHere, reloadKey, active])
 
-  // mo is not embedded on a phone, but it is still the full preview: ask the
-  // server for it only when someone actually wants it.
   const openInMo = async () => {
-    if (!previewable || !file || !diffId) return
+    if (!previewable) return
     setOpeningMo(true)
     setError(null)
     try {
@@ -133,21 +85,9 @@ export function PreviewPane({
     }
   }
 
-  if (!file) {
-    return (
-      <section className="preview">
-        <div className="preview-header">
-          <span className="preview-title">Preview</span>
-        </div>
-        <p className="empty">Select a file.</p>
-      </section>
-    )
-  }
-
   return (
-    <section className="preview">
+    <section className="preview-section">
       <div className="preview-header">
-        <span className="preview-title">Preview</span>
         <span className="path">{filePath(file)}</span>
         {preview && (
           <>
@@ -167,48 +107,6 @@ export function PreviewPane({
           </>
         )}
         <span className="spacer" />
-        {!forced && (
-          <div className="toggle">
-            <button
-              className={kind === 'preview' ? 'active' : ''}
-              onClick={() => setChosen('preview')}
-              title="sbnn's own preview - needs nothing installed, follows the diff as it scrolls"
-            >
-              <Icon name="visibility" small />
-              preview
-            </button>
-            <button
-              className={kind === 'mo' ? 'active' : ''}
-              onClick={() => setChosen('mo')}
-              title="mo - renders more, in a frame, but does not follow the diff"
-            >
-              <MoIcon small />
-              mo
-            </button>
-          </div>
-        )}
-        {/* A disabled button swallows hover, so the tooltip explaining why
-            lives on a span around it instead - it stays reachable exactly
-            when the button itself is not. */}
-        {previewable && onSync && (
-          <span
-            title={
-              !renderHere
-                ? "Only sbnn's own preview can follow the diff: mo is framed from another origin, where a page may not touch its scrolling"
-                : sync
-                  ? 'The preview follows the diff; scrolling it yourself stops that'
-                  : 'Follow the diff again'
-            }
-          >
-            <button
-              className={`ghost icon-only${sync && renderHere ? ' active' : ''}`}
-              disabled={!renderHere}
-              onClick={() => onSync(!sync)}
-            >
-              <Icon name="link" />
-            </button>
-          </span>
-        )}
         {!client.isStatic && (
           <span title="Reload the preview">
             <button
@@ -222,8 +120,8 @@ export function PreviewPane({
         )}
         {/* One slot, always present when not static: a direct link once mo's
             frame has actually loaded, a button that fetches and opens it
-            otherwise. Two different elements swapping in and out by mode
-            made the toolbar's width jump between "preview" and "mo". */}
+            otherwise - two elements swapping in and out by mode made the
+            header's width jump between "preview" and "mo". */}
         {!client.isStatic &&
           (preview?.kind === 'frame' && preview.moUrl ? (
             <a className="ghost button" href={preview.moUrl} target="_blank" rel="noreferrer">
@@ -232,11 +130,7 @@ export function PreviewPane({
               <Icon name="open_in_new" small />
             </a>
           ) : (
-            <button
-              className="ghost"
-              onClick={() => void openInMo()}
-              disabled={!previewable || openingMo}
-            >
+            <button className="ghost" onClick={() => void openInMo()} disabled={!previewable || openingMo}>
               <MoIcon small />
               {openingMo ? 'Opening…' : 'mo'}
               <Icon name="open_in_new" small />
@@ -244,9 +138,9 @@ export function PreviewPane({
           ))}
       </div>
 
-      {!file.isMarkdown ? (
+      {!previewable ? (
         <p className="empty">{filePath(file)} is not Markdown, so there is nothing to preview.</p>
-      ) : loading ? (
+      ) : !active || loading ? (
         <p className="empty">{renderHere ? 'Rendering…' : 'Asking mo for a preview…'}</p>
       ) : error ? (
         <div className="preview-error">
@@ -265,9 +159,8 @@ export function PreviewPane({
       ) : preview?.kind === 'html' ? (
         <div
           className="markdown"
-          ref={body}
-          onWheel={() => onSync?.(false)}
-          onTouchMove={() => onSync?.(false)}
+          onWheel={onUserScroll}
+          onTouchMove={onUserScroll}
           dangerouslySetInnerHTML={{ __html: preview.html }}
         />
       ) : preview?.kind === 'frame' && preview.url ? (

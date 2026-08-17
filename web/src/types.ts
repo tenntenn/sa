@@ -4,6 +4,10 @@ export type FileStatus = 'added' | 'deleted' | 'modified' | 'renamed' | 'copied'
 
 export type ViewMode = 'unified' | 'split'
 
+/** PreviewKind is which of the two previews is showing. sbnn renders one
+ * itself; mo is the other, richer one, in a frame. */
+export type PreviewKind = 'preview' | 'mo'
+
 export interface Line {
   kind: LineKind
   oldNumber: number

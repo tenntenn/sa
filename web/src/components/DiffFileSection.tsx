@@ -14,10 +14,15 @@ interface Props {
   /** narrow is set on a phone, where side by side does not fit. */
   narrow?: boolean
   onChanged: () => void
-  /** foldNudge and viewNudge change whenever a key asks for a fold or a
-   * change of view. Their value means nothing; the change is the message. */
-  foldNudge?: number
-  viewNudge?: number
+  /** folded is the fully resolved state (override, or the server's default,
+   * already forced open when the file carries comments) - this component
+   * only renders it, it does not decide it. */
+  folded: boolean
+  onSetFolded: (value: boolean) => void
+  /** viewMode is likewise resolved by the caller (an override, or the
+   * server's default); a file locked to unified ignores it. */
+  viewMode: ViewMode
+  onSetViewMode: (mode: ViewMode) => void
 }
 
 type Side = 'new' | 'old'
@@ -52,27 +57,23 @@ function marker(kind: Line['kind']): string {
   }
 }
 
-export function DiffView({
+export function DiffFileSection({
   group,
   diff,
   file,
   comments,
   narrow = false,
   onChanged,
-  foldNudge = 0,
-  viewNudge = 0,
+  folded,
+  onSetFolded,
+  viewMode,
+  onSetViewMode,
 }: Props) {
   // A new or deleted file has only one side, so side by side makes no sense
   // for it and the toggle stays locked on unified. A narrow screen has no
   // room for two columns either.
   const locked = narrow || file.status === 'added' || file.status === 'deleted' || file.isBinary
-  const [viewMode, setViewMode] = useState<ViewMode>(file.viewMode)
   const [selection, setSelection] = useState<Selection | null>(null)
-  // A folded file is shut, not hidden: it keeps its place, its counts and
-  // its reason, and one click opens it. A file carrying comments is never
-  // shut - a review that hides a comment is worse than a long page.
-  const [shut, setShut] = useState<boolean | null>(null)
-  const folded = (shut ?? Boolean(file.folded)) && comments.length === 0
   const mode: ViewMode = locked ? 'unified' : viewMode
 
   const commentsByAnchor = useMemo(() => {
@@ -147,19 +148,6 @@ export function DiffView({
     pick(side, line, extend)
   }
 
-  const firstNudge = useRef(true)
-  useEffect(() => {
-    if (firstNudge.current) return
-    setShut((current) => !(current ?? Boolean(file.folded)))
-  }, [foldNudge])
-  useEffect(() => {
-    if (firstNudge.current) return
-    if (!locked) setViewMode((m) => (m === 'split' ? 'unified' : 'split'))
-  }, [viewNudge, locked])
-  useEffect(() => {
-    firstNudge.current = false
-  }, [])
-
   // Dragging across the gutter grows the range under the pointer.
   const dragOver = (side: Side, line: number) => {
     if (!dragging.current) return
@@ -216,7 +204,7 @@ export function DiffView({
       <div className="diff-header">
         <button
           className="diff-title"
-          onClick={() => setShut(!folded)}
+          onClick={() => onSetFolded(!folded)}
           aria-expanded={!folded}
           title={folded ? 'Show this file' : 'Fold this file away'}
         >
@@ -248,7 +236,7 @@ export function DiffView({
             <div className="toggle">
               <button
                 className={mode === 'split' ? 'active' : ''}
-                onClick={() => setViewMode('split')}
+                onClick={() => onSetViewMode('split')}
                 title="Old and new side by side"
               >
                 <Icon name="view_column" small />
@@ -256,7 +244,7 @@ export function DiffView({
               </button>
               <button
                 className={mode === 'unified' ? 'active' : ''}
-                onClick={() => setViewMode('unified')}
+                onClick={() => onSetViewMode('unified')}
                 title="Old and new lines in one column"
               >
                 <Icon name="table_rows" small />
@@ -376,7 +364,7 @@ function UnifiedTable({ hunks, selection, onSelect, onSelectLine, onDragOver, re
                     </td>
                     <td className="marker">{marker(line.kind)}</td>
                     <td className="code" onClick={(ev) => onSelectLine(side, num, ev.shiftKey)}>
-                      {line.content || ' '}
+                      {line.content || ' '}
                       {line.noNewline && <span className="hint"> (no newline at end of file)</span>}
                     </td>
                   </tr>
@@ -507,7 +495,7 @@ function SplitTable({ hunks, selection, onSelect, onSelectLine, onDragOver, rend
 }
 
 function renderSegments(content: string, segments: { text: string; changed: boolean }[] | null) {
-  if (!segments) return content || ' '
+  if (!segments) return content || ' '
   return (
     <>
       {segments.map((seg, i) =>
@@ -517,7 +505,7 @@ function renderSegments(content: string, segments: { text: string; changed: bool
           <Fragment key={i}>{seg.text}</Fragment>
         ),
       )}
-      {content === '' ? ' ' : null}
+      {content === '' ? ' ' : null}
     </>
   )
 }

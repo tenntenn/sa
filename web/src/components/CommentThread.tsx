@@ -115,7 +115,7 @@ function CommentItem({
   const segments = parseBody(comment.body)
 
   return (
-    <div className={`comment${comment.resolved ? ' resolved' : ''}`}>
+    <div id={`comment-${comment.id}`} className={`comment${comment.resolved ? ' resolved' : ''}`}>
       <div className="comment-meta">
         {comment.author && <span className="badge author">{comment.author}</span>}
         <span className="comment-range">{rangeLabel(comment)}</span>

@@ -808,29 +808,64 @@ body.resizing iframe {
 
 /* ---------- preview ---------- */
 
-.preview {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  min-width: 0;
-}
-
-.preview-title {
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--fg-muted);
-}
-
 .preview-frame {
-  flex: 1;
+  display: block;
   width: 100%;
+  height: 80vh;
   border: none;
   background: var(--bg);
 }
 
 .preview-error {
   padding: 12px;
+}
+
+/* ---------- stacked diff / preview ---------- */
+
+/* Every file gets its own section in the one long scroll; a divider
+   between them keeps them from visually running together. */
+.file-section {
+  border-bottom: 1px solid var(--border);
+}
+.file-section:last-child {
+  border-bottom: none;
+}
+
+/* A round divider is a label, not a control - unlike the sidebar's
+   equivalent it cannot be collapsed from here. */
+.diff-round-divider {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: var(--fg-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: var(--bg-soft);
+  border-bottom: 1px solid var(--border);
+}
+
+.diff-toolbar,
+.preview-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--bg-soft);
+  border-bottom: 1px solid var(--border);
+}
+
+/* Stacked below the toolbar, not at the very top, so a file's own sticky
+   header does not slide underneath it as the reader scrolls past. */
+.diff-stack .diff-header {
+  top: var(--diff-toolbar-h, 0px);
+}
+.preview-stack .preview-header {
+  top: var(--preview-toolbar-h, 0px);
 }
 
 /* ---------- misc ---------- */

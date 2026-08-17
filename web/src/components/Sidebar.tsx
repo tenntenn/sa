@@ -4,6 +4,7 @@ import { filePath } from '../types'
 import { client } from '../client'
 import { readSetting, writeSetting } from '../storage'
 import { Icon } from './Icon'
+import { sectionKey } from '../sectionKey'
 
 /** Layout is how the rounds are shown: stacked, or one tab at a time. */
 type Layout = 'list' | 'tabs'
@@ -35,7 +36,11 @@ interface Props {
   diffs: Diff[]
   comments: Comment[]
   status: Status | null
-  selected: { diffId: string; fileId: string } | null
+  /** activeKey is the section the reader is currently scrolled to (or, on a
+   * phone, the one file shown); activeDiffId is which round it belongs to,
+   * for bringing that round's tab forward. */
+  activeKey: string | null
+  activeDiffId: string | null
   onSelect: (diffId: string, fileId: string) => void
   onChanged: () => void
   /** query narrows the list to the paths that contain it. */
@@ -50,7 +55,8 @@ export function Sidebar({
   diffs,
   comments,
   status,
-  selected,
+  activeKey,
+  activeDiffId,
   onSelect,
   onChanged,
   query,
@@ -96,7 +102,7 @@ export function Sidebar({
   // forward rather than leaving the reader on a tab that shows nothing.
   // When a search empties the current tab, the first one with a match
   // takes over, since a tab strip with nothing behind it is a dead end.
-  const preferred = diffs.find((d) => d.id === selected?.diffId)?.id ?? tab ?? diffs[0]?.id ?? null
+  const preferred = diffs.find((d) => d.id === activeDiffId)?.id ?? tab ?? diffs[0]?.id ?? null
   const activeTab =
     tabbed.some((d) => d.id === preferred) ? preferred : (tabbed[0]?.id ?? null)
 
@@ -263,7 +269,7 @@ export function Sidebar({
           </div>
           <ul className="file-list" hidden={isShut(diff)}>
             {shown(diff).map((file) => {
-              const active = selected?.diffId === diff.id && selected.fileId === file.id
+              const active = activeKey === sectionKey(diff.id, file.id)
               const count = commentCount(diff.id, file.id)
               // A folded file is still listed - the point is that it is out
               // of the way, not out of sight.

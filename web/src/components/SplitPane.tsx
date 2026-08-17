@@ -1,4 +1,4 @@
-import { useCallback, useRef, type ReactNode } from 'react'
+import { useCallback, useRef, type ReactNode, type Ref } from 'react'
 import { Divider } from './Divider'
 
 interface Props {
@@ -8,9 +8,11 @@ interface Props {
    * the panes is minimised away. */
   ratio: number
   onRatioChange: (ratio: number) => void
-  /** onLeftScroll reports how far down the left pane is, as a fraction, for
-   * a right pane that is following it. */
-  onLeftScroll?: (fraction: number) => void
+  /** leftRef and rightRef reach the actual scrolling element of each pane -
+   * what a stack inside it needs to run an IntersectionObserver against, or
+   * to scroll programmatically. */
+  leftRef?: Ref<HTMLDivElement>
+  rightRef?: Ref<HTMLDivElement>
 }
 
 /** SPLIT_DEFAULT is the share the diff gets before anyone drags anything. */
@@ -39,7 +41,7 @@ export function nudgeRatio(ratio: number, direction: -1 | 1): number {
 }
 
 /** SplitPane shows the diff and the preview side by side, with a draggable divider. */
-export function SplitPane({ left, right, ratio, onRatioChange, onLeftScroll }: Props) {
+export function SplitPane({ left, right, ratio, onRatioChange, leftRef, rightRef }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
 
   const onDrag = useCallback(
@@ -65,17 +67,10 @@ export function SplitPane({ left, right, ratio, onRatioChange, onLeftScroll }: P
   return (
     <div className="split" ref={containerRef}>
       <div
+        ref={leftRef}
         className={`split-pane${ratio === 0 ? ' collapsed' : ''}`}
         style={{ width: `${ratio * 100}%` }}
         aria-hidden={ratio === 0}
-        // The pane is what scrolls, and a scroll event does not bubble, so
-        // this is the only place a listener hears about it.
-        onScroll={(ev) => {
-          if (!onLeftScroll) return
-          const el = ev.currentTarget
-          const room = el.scrollHeight - el.clientHeight
-          onLeftScroll(room > 0 ? Math.min(1, Math.max(0, el.scrollTop / room)) : 0)
-        }}
       >
         {left}
       </div>
@@ -102,6 +97,7 @@ export function SplitPane({ left, right, ratio, onRatioChange, onLeftScroll }: P
         }
       />
       <div
+        ref={rightRef}
         className={`split-pane${ratio === 1 ? ' collapsed' : ''}`}
         style={{ width: `${(1 - ratio) * 100}%` }}
         aria-hidden={ratio === 1}
