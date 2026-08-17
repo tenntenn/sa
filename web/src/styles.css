@@ -215,11 +215,11 @@ body.resizing iframe {
 
 /* ---------- sidebar ---------- */
 
-.diff-group {
+.diff-round {
   margin-bottom: 12px;
 }
 
-.diff-group-header {
+.diff-round-header {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -230,7 +230,7 @@ body.resizing iframe {
   letter-spacing: 0.04em;
 }
 
-.diff-group-title {
+.diff-round-title {
   flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1157,7 +1157,7 @@ a {
 
 /* A round can be shut, so its heading is a button; and the whole list can
    become tabs, which shows one round at a time. */
-.diff-group-title.as-button {
+.diff-round-title.as-button {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -1173,7 +1173,7 @@ a {
   cursor: pointer;
   text-align: left;
 }
-.diff-group-title.as-button:hover {
+.diff-round-title.as-button:hover {
   color: var(--fg);
 }
 .disclosure {

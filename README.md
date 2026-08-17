@@ -85,6 +85,37 @@ $ sbnn comments              # the comments of the same review
 $ sbnn comments -t default   # the flag still wins
 ```
 
+Group and round are two different sizes, and the words are kept apart on
+purpose: a **group** is the whole review — its URL, its comments, its
+history — and a **round** is one diff sent into it. A group holds one round
+at first and gains another each time you pipe in a new diff, which is what
+"start the next round" (below) means: same group, one more diff.
+
+### Stacked pull requests
+
+sbnn has no idea what GitHub is and never runs `git` or `gh` itself, but a
+group maps onto a stacked pull request without any extra machinery: one
+group per branch, diffed against the branch below it rather than against
+main, so the group holds only that branch's own change:
+
+```console
+$ git diff origin/main...feature-1 | sbnn --target feature-1 --label pr=101
+$ git diff feature-1...feature-2   | sbnn --target feature-2 --label pr=102
+$ git diff feature-2...feature-3   | sbnn --target feature-3 --label pr=103
+```
+
+`--label` is what carries the PR number or URL along — sbnn stores it and
+reads nothing into it, and it rides into `sbnn reviews` so a round can be
+matched back to the PR it belonged to later. Once more than one group is
+open, the sidebar's **Groups** list turns into a stack of links, one per
+branch still under review, each saying how many diffs and open comments it
+holds — which reads as the shape of the stack without sbnn having to know
+what a stack is.
+
+None of this is required — reviewing a stack works with the default group
+and no labels at all — it is only the shape that keeps sbnn's
+one-review-per-group model lined up with GitHub's one-review-per-PR model.
+
 ### Reviewing
 
 - Select the lines to comment on by dragging over the line numbers, by
@@ -106,12 +137,13 @@ $ sbnn comments -t default   # the flag still wins
   Enter opens the first path still standing, Escape clears. Nothing turns up
   that does not contain what you typed — a list you are scanning is the wrong
   place for clever matching.
-- Each round of a review is a group in the file list. Click its heading to
-  shut it — the heading keeps saying how many files and how many open
-  comments are inside — or switch the list to **tabs** to see one round at a
-  time. Filtering by path searches the tabs too: a round with nothing
-  matching drops out of the strip, the rest say how many paths they hold,
-  and the search never takes you out of the layout you chose.
+- Each round of a review — each diff sent to the group — gets its own
+  heading in the file list. Click it to shut that round — the heading keeps
+  saying how many files and how many open comments are inside — or switch
+  the list to **tabs** to see one round at a time. Filtering by path
+  searches the tabs too: a round with nothing matching drops out of the
+  strip, the rest say how many paths they hold, and the search never takes
+  you out of the layout you chose.
 - Every pane is resizable and can be minimised away: drag the edge between
   two panes, double click it to reset (or to put the file list away), or use
   the **Files**, **Diff** and **Preview** switches in the header. Dragging an
