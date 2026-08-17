@@ -788,6 +788,9 @@ body.resizing iframe {
 
 .comment-actions {
   display: flex;
+  /* The same row also has to fit inside the narrow card a selection in the
+     preview opens, where it wraps rather than overflowing it. */
+  flex-wrap: wrap;
   align-items: center;
   gap: 6px;
   margin-top: 6px;
@@ -818,6 +821,80 @@ body.resizing iframe {
 
 .preview-error {
   padding: 12px;
+}
+
+/* ---------- commenting on a selection in the preview ---------- */
+
+/* sbnn paints the selected text itself rather than leaving it to the
+   browser. Opening the comment form focuses its textarea, and focusing
+   anything collapses the document selection, so the native highlight cannot
+   survive the very action it exists to start. This one stays until the
+   reader puts it away. It is the colour the diff marks the lines a comment
+   is being written about with, because it means the same thing here. */
+::highlight(sbnn-selection) {
+  background-color: var(--selected);
+  color: var(--fg);
+}
+
+/* The menu is pinned to the window and placed from JavaScript, which
+   measures it first - it holds a small button one moment and a whole comment
+   form the next, and both have to end up on screen. Hidden until that has
+   happened, so it is never seen in the corner it starts in. */
+.selection-menu {
+  position: fixed;
+  top: 0;
+  left: 0;
+  visibility: hidden;
+  z-index: 30;
+  padding: 4px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow:
+    0 8px 24px rgba(0, 0, 0, 0.18),
+    0 2px 6px rgba(0, 0, 0, 0.12);
+  /* A short screen can still run out of room once the button has grown into
+     a form, so the menu scrolls itself rather than running off the edge.
+     Sideways it never should: the action row wraps instead, and setting only
+     overflow-y would leave the browser defaulting overflow-x to auto. */
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* A single "+" reads better as a small square than as a rectangle sized for
+   a word. */
+.selection-add {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  font-size: 16px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 7px;
+}
+
+/* In the diff the form hangs off the gutter; here the card around it already
+   is the frame, so it drops the offset and the rule down its left. */
+.selection-menu .comment-form {
+  width: 320px;
+  max-width: calc(100vw - 32px);
+  margin: 0;
+  border-left: none;
+  border-radius: 6px;
+}
+
+/* The card is narrow enough that what the comment is about and the note
+   about how it was selected do not fit on one line - they go on their own
+   lines rather than breaking a path across two. */
+.selection-menu .comment-meta {
+  flex-wrap: wrap;
+}
+
+.selection-menu .comment-range {
+  white-space: nowrap;
 }
 
 /* ---------- stacked diff / preview ---------- */
@@ -1027,7 +1104,12 @@ a {
   line-height: 1.7;
 }
 
-.markdown > :first-child {
+/* Every block is wrapped in a plain element carrying the source lines it
+   came from, so what opens the preview is now that wrapper's first child
+   rather than the preview's own. The wrapper has no box of its own, so the
+   margins inside it go on collapsing the way they did before. */
+.markdown > :first-child,
+.markdown > [data-ln]:first-child > :first-child {
   margin-top: 0;
 }
 

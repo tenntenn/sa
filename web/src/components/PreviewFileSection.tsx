@@ -159,6 +159,15 @@ export function PreviewFileSection({ group, diffId, file, status, kind, active, 
       ) : preview?.kind === 'html' ? (
         <div
           className="markdown"
+          // What a selection in here would be a comment on. data-line-anchored
+          // is what PreviewSelection looks for: renderMarkdown marked every
+          // block with the lines it came from, and a whole preview still
+          // numbers them the way the file does - a partial one marks the gaps
+          // it skipped instead, so nothing in it can be anchored to a line.
+          data-diff-id={diffId}
+          data-file-id={file.id}
+          data-path={filePath(file)}
+          data-line-anchored={preview.complete ? 'true' : undefined}
           onWheel={onUserScroll}
           onTouchMove={onUserScroll}
           dangerouslySetInnerHTML={{ __html: preview.html }}
