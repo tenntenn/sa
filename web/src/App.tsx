@@ -375,6 +375,7 @@ export function App() {
       scrollTo={syncScroll ? scrollTo : null}
       sync={syncScroll}
       onSync={setSyncScroll}
+      onChanged={() => void reload()}
     />
   )
 

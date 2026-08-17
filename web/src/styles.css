@@ -788,6 +788,7 @@ body.resizing iframe {
 
 .comment-actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 6px;
   margin-top: 6px;
@@ -831,6 +832,67 @@ body.resizing iframe {
 
 .preview-error {
   padding: 12px;
+}
+
+/* selection-menu is fixed to the viewport, positioned from the selection's
+   own bounding rect, so it tracks the selection regardless of where the
+   scrollable preview underneath it is scrolled to. A small card, the shape
+   of a menu with one row in it - not a full sized call to action button,
+   which is too heavy for something that follows every drag of the mouse. */
+.selection-menu {
+  position: fixed;
+  transform: translate(-50%, calc(-100% - 10px));
+  z-index: 30;
+  padding: 4px;
+  background: var(--bg-elevated, var(--bg));
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow:
+    0 8px 24px rgba(0, 0, 0, 0.18),
+    0 2px 6px rgba(0, 0, 0, 0.12);
+  /* Whichever side was picked for more room, a short phone screen can still
+     run out of it once the button grows into a comment form - so the menu
+     scrolls itself rather than running off the screen. */
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
+  /* The action row now wraps instead of overflowing, so sideways scrolling
+     is never wanted here - stated explicitly, since setting only
+     overflow-y would otherwise make the browser default overflow-x to
+     auto as well. */
+  overflow-x: hidden;
+}
+
+/* Placement flips below the selection when there is no room above it -
+   top is then the bottom edge of the selection, not its top, so this only
+   needs to sit just under that point rather than climb back over it. */
+.selection-menu[data-placement='below'] {
+  transform: translate(-50%, 10px);
+}
+
+.selection-menu > button {
+  margin: 0;
+}
+
+/* A single "+" reads better as a small square than as a wide rectangle
+   sized for a word. */
+.selection-add {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  font-size: 16px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 7px;
+}
+
+.selection-menu .comment-form {
+  width: 320px;
+  max-width: calc(100vw - 32px);
+  margin: 0;
+  border-radius: 8px;
+  box-shadow: none;
 }
 
 /* ---------- misc ---------- */
