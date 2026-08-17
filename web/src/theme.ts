@@ -31,25 +31,3 @@ export function applyTheme(theme: Theme): void {
   writeSetting(STORAGE_KEY, theme)
 }
 
-/** nextTheme cycles auto → light → dark → auto. */
-export function nextTheme(theme: Theme): Theme {
-  switch (theme) {
-    case 'auto':
-      return 'light'
-    case 'light':
-      return 'dark'
-    default:
-      return 'auto'
-  }
-}
-
-export function themeLabel(theme: Theme): string {
-  switch (theme) {
-    case 'light':
-      return 'Light'
-    case 'dark':
-      return 'Dark'
-    default:
-      return 'Auto'
-  }
-}

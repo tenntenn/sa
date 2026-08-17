@@ -84,6 +84,22 @@ export function SplitPane({ left, right, ratio, onRatioChange, onLeftScroll }: P
         onDrag={onDrag}
         onReset={() => onRatioChange(SPLIT_DEFAULT)}
         onNudge={(direction) => onRatioChange(nudgeRatio(ratio, direction))}
+        handles={
+          ratio === 0
+            ? [{ icon: 'chevron_right', title: 'Show the diff', onClick: () => onRatioChange(SPLIT_DEFAULT) }]
+            : ratio === 1
+              ? [
+                  {
+                    icon: 'chevron_left',
+                    title: 'Show the preview',
+                    onClick: () => onRatioChange(SPLIT_DEFAULT),
+                  },
+                ]
+              : [
+                  { icon: 'chevron_left', title: 'Hide the diff', onClick: () => onRatioChange(0) },
+                  { icon: 'chevron_right', title: 'Hide the preview', onClick: () => onRatioChange(1) },
+                ]
+        }
       />
       <div
         className={`split-pane${ratio === 1 ? ' collapsed' : ''}`}

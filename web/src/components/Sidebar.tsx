@@ -3,6 +3,7 @@ import type { Comment, Diff, FileDiff, Status } from '../types'
 import { filePath } from '../types'
 import { client } from '../client'
 import { readSetting, writeSetting } from '../storage'
+import { Icon } from './Icon'
 
 /** Layout is how the rounds are shown: stacked, or one tab at a time. */
 type Layout = 'list' | 'tabs'
@@ -139,6 +140,7 @@ export function Sidebar({
 
       {total > 0 && (
         <div className="file-search">
+          <Icon name="search" small />
           <input
             ref={searchRef}
             type="search"
@@ -161,16 +163,18 @@ export function Sidebar({
             </span>
           )}
           {diffs.length > 1 && (
-            <div className="toggle sm" title="Stack the rounds, or show one at a time">
+            <div className="toggle sm">
               <button
                 className={layout === 'list' ? 'active' : ''}
                 onClick={() => setLayout('list')}
+                title="Stack every round in one list"
               >
                 list
               </button>
               <button
                 className={layout === 'tabs' ? 'active' : ''}
                 onClick={() => setLayout('tabs')}
+                title="Show one round at a time"
               >
                 tabs
               </button>
@@ -205,13 +209,13 @@ export function Sidebar({
                 <span
                   className="tab-remove"
                   role="button"
-                  title="Remove this diff"
+                  title="Remove this round"
                   onClick={(ev) => {
                     ev.stopPropagation()
                     void client.deleteDiff(group, diff.id).then(onChanged)
                   }}
                 >
-                  ×
+                  <Icon name="close" small />
                 </span>
               )}
             </button>
@@ -231,7 +235,9 @@ export function Sidebar({
                 aria-expanded={!isShut(diff)}
                 onClick={() => toggleRound(diff.id)}
               >
-                <span className="disclosure">{isShut(diff) ? '▸' : '▾'}</span>
+                <span className="disclosure">
+                  <Icon name={isShut(diff) ? 'chevron_right' : 'expand_more'} small />
+                </span>
                 {diff.title}
                 <span className="hint">{shown(diff).length}</span>
                 {roundComments(diff) > 0 && (
@@ -246,12 +252,12 @@ export function Sidebar({
             {!client.isStatic && (
               <button
                 className="ghost danger"
-                title="Remove this diff"
+                title="Remove this round"
                 onClick={() => {
                   void client.deleteDiff(group, diff.id).then(onChanged)
                 }}
               >
-                ×
+                <Icon name="close" small />
               </button>
             )}
           </div>
@@ -298,7 +304,7 @@ export function Sidebar({
                 <a className={g.name === group ? 'active' : ''} href={g.url}>
                   {g.name}
                   <span className="hint">
-                    {g.diffs} diff(s){g.unresolved > 0 ? `, ${g.unresolved} open` : ''}
+                    {g.diffs} round(s){g.unresolved > 0 ? `, ${g.unresolved} open` : ''}
                   </span>
                 </a>
               </li>

@@ -11,6 +11,9 @@ export default defineConfig({
     emptyOutDir: true,
   },
   server: {
+    fs: {
+      strict: false,
+    },
     proxy: {
       '/_': {
         target: 'http://localhost:6280',

@@ -1,4 +1,14 @@
 import { useRef, useState } from 'react'
+import { Icon } from './Icon'
+
+/** A handle is the small button riding on the divider that puts one specific
+ * pane away, or brings it back, in a single click - the drag and the double
+ * click do the same thing but neither is discoverable by looking at the bar. */
+interface Handle {
+  icon: string
+  title: string
+  onClick: () => void
+}
 
 interface Props {
   /** onDrag receives the pointer position while the divider is dragged. */
@@ -8,6 +18,9 @@ interface Props {
   /** onNudge moves the divider by a step with the arrow keys. */
   onNudge?: (direction: -1 | 1) => void
   label: string
+  /** One handle brings a single pane back; two, either side of a middle
+   * divider, each put away the pane on their side. */
+  handles?: Handle[]
 }
 
 /**
@@ -19,7 +32,7 @@ interface Props {
  * the Markdown preview stops the moment the pointer crosses into its iframe,
  * because the events are delivered to the framed document instead.
  */
-export function Divider({ onDrag, onReset, onNudge, label }: Props) {
+export function Divider({ onDrag, onReset, onNudge, label, handles }: Props) {
   const [dragging, setDragging] = useState(false)
   const pointerID = useRef<number | null>(null)
 
@@ -40,6 +53,11 @@ export function Divider({ onDrag, onReset, onNudge, label }: Props) {
       aria-label={label}
       tabIndex={0}
       onPointerDown={(ev) => {
+        // The handle sits on the divider so it can be seen, not so a drag
+        // started on it fights the click - capturing the pointer here would
+        // send the handle's own pointerup (and the click after it) to this
+        // div instead, and the button would never fire.
+        if ((ev.target as HTMLElement).closest('.divider-handle')) return
         ev.preventDefault()
         ev.currentTarget.setPointerCapture(ev.pointerId)
         pointerID.current = ev.pointerId
@@ -71,6 +89,26 @@ export function Divider({ onDrag, onReset, onNudge, label }: Props) {
           onReset?.()
         }
       }}
-    />
+    >
+      {handles && handles.length > 0 && (
+        <div className="divider-handles">
+          {handles.map((handle, i) => (
+            <button
+              key={i}
+              type="button"
+              className="divider-handle"
+              title={handle.title}
+              onPointerDown={(ev) => ev.stopPropagation()}
+              onClick={(ev) => {
+                ev.stopPropagation()
+                handle.onClick()
+              }}
+            >
+              <Icon name={handle.icon} small />
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   )
 }

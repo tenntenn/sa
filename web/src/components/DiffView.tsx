@@ -4,6 +4,7 @@ import { filePath } from '../types'
 import { client } from '../client'
 import { wordDiff } from '../wordDiff'
 import { CommentForm, CommentThread } from './CommentThread'
+import { Icon } from './Icon'
 
 interface Props {
   group: string
@@ -213,7 +214,15 @@ export function DiffView({
   return (
     <div className="diff">
       <div className="diff-header">
-        <div className="diff-title">
+        <button
+          className="diff-title"
+          onClick={() => setShut(!folded)}
+          aria-expanded={!folded}
+          title={folded ? 'Show this file' : 'Fold this file away'}
+        >
+          <span className="disclosure">
+            <Icon name={folded ? 'chevron_right' : 'expand_more'} small />
+          </span>
           <span className={`status status-${file.status}`}>{file.status}</span>
           <span className="path">
             {file.status === 'renamed' || file.status === 'copied'
@@ -222,13 +231,8 @@ export function DiffView({
           </span>
           <span className="stat add">+{file.additions}</span>
           <span className="stat del">-{file.deletions}</span>
-        </div>
+        </button>
         <div className="diff-tools">
-          {!folded && (
-            <button className="ghost" onClick={() => setShut(true)} title="Fold this file away">
-              fold
-            </button>
-          )}
           {locked ? (
             <span
               className="hint"
@@ -245,13 +249,17 @@ export function DiffView({
               <button
                 className={mode === 'split' ? 'active' : ''}
                 onClick={() => setViewMode('split')}
+                title="Old and new side by side"
               >
+                <Icon name="view_column" small />
                 split
               </button>
               <button
                 className={mode === 'unified' ? 'active' : ''}
                 onClick={() => setViewMode('unified')}
+                title="Old and new lines in one column"
               >
+                <Icon name="table_rows" small />
                 unified
               </button>
             </div>
@@ -260,12 +268,10 @@ export function DiffView({
       </div>
 
       {folded ? (
-        <div className="folded">
-          <p className="empty">Folded — {file.foldReason || 'the sender asked for it'}</p>
-          <button className="ghost" onClick={() => setShut(false)}>
-            Show {file.additions + file.deletions} changed line(s)
-          </button>
-        </div>
+        <p className="empty">
+          Folded — {file.foldReason || 'the sender asked for it'} · {file.additions + file.deletions}{' '}
+          changed lines
+        </p>
       ) : file.isBinary ? (
         <p className="empty">Binary file — no diff to show.</p>
       ) : file.hunks.length === 0 ? (
@@ -425,7 +431,7 @@ function buildSplitRows(lines: Line[]): SplitRow[] {
 
 function SplitTable({ hunks, selection, onSelect, onSelectLine, onDragOver, renderExtras }: TableProps) {
   return (
-    <table className="diff-table split">
+    <table className="diff-table side-by-side">
       <colgroup>
         <col className="col-num" />
         <col className="col-side" />

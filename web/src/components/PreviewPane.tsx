@@ -3,6 +3,8 @@ import type { FileDiff, Status } from '../types'
 import { filePath } from '../types'
 import { client, type PreviewResult } from '../client'
 import { readSetting, writeSetting } from '../storage'
+import { Icon } from './Icon'
+import { MoIcon } from './MoIcon'
 
 interface Props {
   group: string
@@ -166,24 +168,30 @@ export function PreviewPane({
         )}
         <span className="spacer" />
         {!forced && (
-          <div
-            className="toggle"
-            title="sbnn draws the preview itself and it can follow the diff; mo renders more, in a frame"
-          >
+          <div className="toggle">
             <button
               className={kind === 'preview' ? 'active' : ''}
               onClick={() => setChosen('preview')}
+              title="sbnn's own preview - needs nothing installed, follows the diff as it scrolls"
             >
+              <Icon name="visibility" small />
               preview
             </button>
-            <button className={kind === 'mo' ? 'active' : ''} onClick={() => setChosen('mo')}>
+            <button
+              className={kind === 'mo' ? 'active' : ''}
+              onClick={() => setChosen('mo')}
+              title="mo - renders more, in a frame, but does not follow the diff"
+            >
+              <MoIcon small />
               mo
             </button>
           </div>
         )}
+        {/* A disabled button swallows hover, so the tooltip explaining why
+            lives on a span around it instead - it stays reachable exactly
+            when the button itself is not. */}
         {previewable && onSync && (
-          <label
-            className="switch"
+          <span
             title={
               !renderHere
                 ? "Only sbnn's own preview can follow the diff: mo is framed from another origin, where a page may not touch its scrolling"
@@ -192,30 +200,48 @@ export function PreviewPane({
                   : 'Follow the diff again'
             }
           >
-            <input
-              type="checkbox"
-              checked={sync && renderHere}
+            <button
+              className={`ghost icon-only${sync && renderHere ? ' active' : ''}`}
               disabled={!renderHere}
-              onChange={(ev) => onSync(ev.target.checked)}
-            />
-            Sync
-          </label>
+              onClick={() => onSync(!sync)}
+            >
+              <Icon name="link" />
+            </button>
+          </span>
         )}
         {!client.isStatic && (
-          <button className="ghost" onClick={() => setReloadKey((k) => k + 1)} disabled={!previewable}>
-            Reload
-          </button>
+          <span title="Reload the preview">
+            <button
+              className="ghost icon-only"
+              onClick={() => setReloadKey((k) => k + 1)}
+              disabled={!previewable}
+            >
+              <Icon name="refresh" />
+            </button>
+          </span>
         )}
-        {preview?.kind === 'frame' && preview.moUrl && (
-          <a className="ghost button" href={preview.moUrl} target="_blank" rel="noreferrer">
-            Open in mo
-          </a>
-        )}
-        {!client.isStatic && renderHere && (
-          <button className="ghost" onClick={() => void openInMo()} disabled={!previewable || openingMo}>
-            {openingMo ? 'Opening…' : 'Open in mo'}
-          </button>
-        )}
+        {/* One slot, always present when not static: a direct link once mo's
+            frame has actually loaded, a button that fetches and opens it
+            otherwise. Two different elements swapping in and out by mode
+            made the toolbar's width jump between "preview" and "mo". */}
+        {!client.isStatic &&
+          (preview?.kind === 'frame' && preview.moUrl ? (
+            <a className="ghost button" href={preview.moUrl} target="_blank" rel="noreferrer">
+              <MoIcon small />
+              mo
+              <Icon name="open_in_new" small />
+            </a>
+          ) : (
+            <button
+              className="ghost"
+              onClick={() => void openInMo()}
+              disabled={!previewable || openingMo}
+            >
+              <MoIcon small />
+              {openingMo ? 'Opening…' : 'mo'}
+              <Icon name="open_in_new" small />
+            </button>
+          ))}
       </div>
 
       {!file.isMarkdown ? (
