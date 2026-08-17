@@ -119,12 +119,94 @@ func runeWidth(r rune) int {
 	return 1
 }
 
+// sgrPairs are the attributes wrap follows across a line break, each "on"
+// escape beside the escape that turns just it off again. The strings are the
+// ones inline.go emits and are not redefined here: an escape wrap invents is an
+// escape no other part of the package knows how to close.
+var sgrPairs = [...]struct{ on, off string }{
+	{boldOn, boldOff},
+	{italicOn, italicOff},
+	{strikeOn, strikeOff},
+	{codeOn, codeOff},
+}
+
+// sgrOff is the escape that closes the attribute opened by on.
+func sgrOff(on string) string {
+	for _, p := range sgrPairs {
+		if p.on == on {
+			return p.off
+		}
+	}
+	return ""
+}
+
+// isSGRReset reports whether esc is the blanket reset, which drops every
+// attribute at once. Input arrives from a diff, so it can carry a reset this
+// package would never emit itself, and what follows one is undecorated.
+func isSGRReset(esc string) bool {
+	if escapeLen(esc) != len(esc) || !strings.HasSuffix(esc, "m") {
+		return false
+	}
+	// escapeLen only accepts a two-byte CSI introducer, so the parameters are
+	// everything between it and the final byte.
+	for _, param := range strings.Split(esc[2:len(esc)-1], ";") {
+		if param != "" && param != "0" {
+			return false
+		}
+	}
+	return true
+}
+
+// trackSGR folds one cell into open, the list of attributes in effect, kept in
+// the order they were opened so they can be closed in the opposite one.
+//
+// Any other escape - a colour, a cursor move, something from the input - is
+// left alone: wrap passes it through untouched and does not try to reopen on
+// the next line something it does not know how to close.
+func trackSGR(open []string, text string) []string {
+	if len(text) == 0 || escapeLen(text) != len(text) {
+		return open
+	}
+	for _, p := range sgrPairs {
+		switch text {
+		case p.on:
+			for _, o := range open {
+				if o == text {
+					return open // already open; opening twice would close once too few
+				}
+			}
+			return append(open, text)
+		case p.off:
+			for i, o := range open {
+				if o == p.on {
+					return append(open[:i:i], open[i+1:]...)
+				}
+			}
+			return open
+		}
+	}
+	if isSGRReset(text) {
+		return nil
+	}
+	return open
+}
+
 // wrap breaks s into lines of at most limit columns.
 //
 // Spaces are where a line prefers to break, and the space itself disappears
 // with the break. A word too long to fit anywhere - a URL, a run of Japanese,
 // which has no spaces at all - is broken between runes instead, because the
 // alternative is a line that runs off the screen.
+//
+// Decoration never crosses a break: a line that ends inside a bold run closes
+// the bold at its end, and the next line opens it again at its start, so every
+// line returned is balanced on its own. A TUI draws a window of these lines,
+// not all of them, and both halves of that matter - printing only the middle of
+// a wrapped bold sentence has to come out bold, and printing only its first
+// line must not leave the terminal bold for whatever is drawn next.
+//
+// The escapes added this way are not counted: they occupy no columns, so lines
+// break in exactly the same places as they would without them.
 func wrap(s string, limit int) []string {
 	if limit < 1 {
 		limit = 1
@@ -133,10 +215,33 @@ func wrap(s string, limit int) []string {
 	var lines []string
 	var line strings.Builder
 	lineWidth := 0
+	var open []string // attributes the line so far has left open, oldest first
+	write := func(cs []cell) {
+		for _, c := range cs {
+			line.WriteString(c.text)
+			lineWidth += c.width
+			open = trackSGR(open, c.text)
+		}
+	}
+	// closeOpen and reopen write escapes directly rather than through write:
+	// they must not disturb the attributes being tracked, and they add no
+	// columns to the line.
+	closeOpen := func() {
+		for i := len(open) - 1; i >= 0; i-- {
+			line.WriteString(sgrOff(open[i]))
+		}
+	}
+	reopen := func() {
+		for _, on := range open {
+			line.WriteString(on)
+		}
+	}
 	flush := func() {
+		closeOpen()
 		lines = append(lines, line.String())
 		line.Reset()
 		lineWidth = 0
+		reopen()
 	}
 	for i := 0; i < len(cs); {
 		gapStart := i
@@ -155,28 +260,26 @@ func wrap(s string, limit int) []string {
 		wordWidth := cellsWidth(word)
 		gapWidth := cellsWidth(gap)
 		if lineWidth > 0 && lineWidth+gapWidth+wordWidth <= limit {
-			line.WriteString(cellsText(gap))
-			line.WriteString(cellsText(word))
-			lineWidth += gapWidth + wordWidth
+			write(gap)
+			write(word)
 			continue
 		}
 		if lineWidth > 0 {
 			flush()
 		}
 		if wordWidth <= limit {
-			line.WriteString(cellsText(word))
-			lineWidth = wordWidth
+			write(word)
 			continue
 		}
-		for _, c := range word {
-			if lineWidth > 0 && lineWidth+c.width > limit {
+		for k := range word {
+			if lineWidth > 0 && lineWidth+word[k].width > limit {
 				flush()
 			}
-			line.WriteString(c.text)
-			lineWidth += c.width
+			write(word[k : k+1])
 		}
 	}
 	if line.Len() > 0 || len(lines) == 0 {
+		closeOpen()
 		lines = append(lines, line.String())
 	}
 	return lines
