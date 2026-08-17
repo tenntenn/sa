@@ -11,8 +11,6 @@ import (
 	"fmt"
 	"io"
 
-	tea "github.com/charmbracelet/bubbletea"
-
 	"github.com/tenntenn/sbnn/internal/model"
 )
 
@@ -50,12 +48,5 @@ func Run(files []*model.File) error {
 		return err
 	}
 	defer tty.Close()
-
-	p := tea.NewProgram(newModel(files),
-		tea.WithInput(tty),
-		tea.WithOutput(tty),
-		tea.WithAltScreen(),
-	)
-	_, err = p.Run()
-	return err
+	return runLoop(tty, NewState(files), newPalette(colourEnabled()))
 }

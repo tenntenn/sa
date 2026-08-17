@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/rivo/uniseg"
+
 	"github.com/tenntenn/sbnn/internal/model"
 )
 
@@ -27,7 +29,43 @@ const (
 	// listMaxWidth and listMinWidth bound the file list pane.
 	listMaxWidth = 40
 	listMinWidth = 20
+	// ellipsis marks a line that was cut. It takes one cell.
+	ellipsis = "…"
 )
+
+// cellWidth is how many columns of a terminal s takes up. A column is not a
+// byte and not a rune: a kanji takes two, a combining accent takes none, and
+// an emoji joined by a zero-width joiner takes two however many runes it is
+// spelled with. Every width in this package is counted here, and nowhere else,
+// so that the panes line up whatever the diff is written in.
+func cellWidth(s string) int {
+	return uniseg.StringWidth(s)
+}
+
+// splitCells cuts s after exactly cells columns and returns the two halves.
+// The cut lands on a grapheme cluster boundary, so a two-cell character is
+// never halved: when one straddles the mark, it goes to tail and head comes
+// back one cell short. A string narrower than cells is returned whole.
+func splitCells(s string, cells int) (head, tail string) {
+	if cells <= 0 {
+		return "", s
+	}
+	if cellWidth(s) <= cells {
+		return s, ""
+	}
+	used, end, state := 0, 0, -1
+	for rest := s; rest != ""; {
+		cluster, remainder, boundaries, next := uniseg.StepString(rest, state)
+		w := boundaries >> uniseg.ShiftWidth
+		if used+w > cells {
+			break
+		}
+		used += w
+		end += len(cluster)
+		rest, state = remainder, next
+	}
+	return s[:end], s[end:]
+}
 
 // FileListLines draws the file list, one line per file, exactly height lines
 // long. A list too long to fit is scrolled so that the selected file is on
@@ -215,26 +253,30 @@ func window(lines []string, cursor, height int) []string {
 }
 
 // fit makes text drawable in width cells: control bytes go, tabs become
-// spaces, and what is still too long is cut with an ellipsis.
+// spaces, and what is still too long is cut with an ellipsis. The result is
+// never wider than width, counted in cells.
 func fit(text string, width int) string {
 	if width <= 0 {
 		return ""
 	}
 	text = sanitize(text)
-	runes := []rune(text)
-	if len(runes) <= width {
+	if cellWidth(text) <= width {
 		return text
 	}
 	if width == 1 {
-		return "…"
+		return ellipsis
 	}
-	return string(runes[:width-1]) + "…"
+	// The ellipsis takes the last cell, so the text gets width-1. Cutting on a
+	// cluster boundary can leave a cell spare in front of a wide character;
+	// that is a blank column, not a broken one.
+	head, _ := splitCells(text, width-1)
+	return head + ellipsis
 }
 
-// pad widens text to width cells, and cuts it when it is wider.
+// pad widens text to exactly width cells, and cuts it when it is wider.
 func pad(text string, width int) string {
 	text = fit(text, width)
-	if n := width - len([]rune(text)); n > 0 {
+	if n := width - cellWidth(text); n > 0 {
 		return text + strings.Repeat(" ", n)
 	}
 	return text

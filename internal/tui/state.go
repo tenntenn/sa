@@ -53,9 +53,8 @@ func (s *State) Current() *model.File {
 }
 
 // Key applies one key press and reports whether the reader asked to leave.
-// Keys that mean nothing here change nothing. The keys are named the way
-// bubbletea names them, which is what lets Update hand its own strings over
-// without reading them.
+// Keys that mean nothing here change nothing, so decodeKeys can hand over
+// whatever it read without having to know what this switch covers.
 func (s *State) Key(key string) (quit bool) {
 	switch key {
 	case "q", "ctrl+c", "esc":
