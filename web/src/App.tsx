@@ -369,6 +369,11 @@ export function App() {
     />
   )
 
+  // A group with nothing in it yet is still worth a page, since other
+  // groups may already have a review waiting - the reader just landed on
+  // the wrong one.
+  const otherGroups = status?.groups.filter((g) => g.name !== group) ?? []
+
   const welcome = (
     <div className="welcome">
       <h1>{client.isStatic ? 'This page carries no diff' : 'Waiting for a diff'}</h1>
@@ -383,6 +388,23 @@ export function App() {
         Comments you leave here are readable from the command line with{' '}
         <code>sbnn comments{group === 'default' ? '' : ` -t ${group}`}</code>.
       </p>
+      {otherGroups.length > 0 && (
+        <div className="groups">
+          <div className="groups-title">Other reviews</div>
+          <ul>
+            {otherGroups.map((g) => (
+              <li key={g.name}>
+                <a href={g.url}>
+                  {g.name}
+                  <span className="hint">
+                    {g.diffs} diff(s){g.unresolved > 0 ? `, ${g.unresolved} open` : ''}
+                  </span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   )
 
