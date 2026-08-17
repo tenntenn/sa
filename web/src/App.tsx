@@ -5,12 +5,13 @@ import { readSetting, writeSetting } from './storage'
 import type { Comment, Diff, FileDiff, Status, Verdict } from './types'
 import { DiffView } from './components/DiffView'
 import { Divider } from './components/Divider'
+import { Icon } from './components/Icon'
 import { PreviewPane } from './components/PreviewPane'
 import { Sidebar } from './components/Sidebar'
 import { clampRatio, SplitPane, SPLIT_DEFAULT } from './components/SplitPane'
 import { useNarrowLayout } from './useMediaQuery'
 import { plainKey, shortcuts, typingInto } from './shortcuts'
-import { applyTheme, nextTheme, storedTheme, themeLabel, type Theme } from './theme'
+import { applyTheme, storedTheme, type Theme } from './theme'
 
 interface Selected {
   diffId: string
@@ -63,6 +64,7 @@ export function App() {
   const [closing, setClosing] = useState(false)
   const [reviewNote, setReviewNote] = useState<string | null>(null)
   const [help, setHelp] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
   // foldNudge and viewNudge are how a key reaches the file on screen: the
   // view owns that state, and a counter is a message it cannot miss.
   const [foldNudge, setFoldNudge] = useState(0)
@@ -79,10 +81,21 @@ export function App() {
   const [scrollTo, setScrollTo] = useState<number | null>(null)
   const bodyRef = useRef<HTMLDivElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
+  const settingsRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     applyTheme(theme)
   }, [theme])
+
+  // A menu left open is a click away from closing, wherever that click lands.
+  useEffect(() => {
+    if (!settingsOpen) return
+    const onPointerDown = (ev: PointerEvent) => {
+      if (!settingsRef.current?.contains(ev.target as Node)) setSettingsOpen(false)
+    }
+    document.addEventListener('pointerdown', onPointerDown)
+    return () => document.removeEventListener('pointerdown', onPointerDown)
+  }, [settingsOpen])
 
   useEffect(() => {
     writeSetting(SIDEBAR_KEY, String(sidebarWidth))
@@ -106,11 +119,6 @@ export function App() {
   useEffect(() => {
     writeSetting(SPLIT_KEY, String(splitRatio))
   }, [splitRatio])
-
-  // Minimising one pane hands its room to the other; bringing it back splits
-  // the room again rather than restoring a width nobody remembers.
-  const toggleDiff = () => setSplitRatio((r) => (r === 0 ? SPLIT_DEFAULT : 0))
-  const togglePreview = () => setSplitRatio((r) => (r === 1 ? SPLIT_DEFAULT : 1))
 
   const reload = useCallback(async () => {
     try {
@@ -270,6 +278,7 @@ export function App() {
       if (ev.key === 'Escape') {
         setHelp(false)
         setReviewNote(null)
+        setSettingsOpen(false)
         return
       }
       if (typingInto(ev.target)) return
@@ -414,7 +423,7 @@ export function App() {
         <span className="brand">sbnn</span>
         <span className="group">{group}</span>
         <span className="hint counts">
-          {diffs.length} diff(s) · {comments.length} comment(s)
+          {diffs.length} round(s) · {comments.length} comment(s)
           {openComments > 0 ? ` · ${openComments} open` : ''}
         </span>
         {client.isStatic && (
@@ -432,66 +441,90 @@ export function App() {
           </span>
         )}
         <span className="spacer" />
-        <button className="ghost" onClick={() => void copyPrompt()} disabled={comments.length === 0}>
-          {copied ? 'Copied' : 'Copy prompt'}
-        </button>
-        {!client.isStatic && (
+        <div className="toolbar-group">
+          {/* A disabled button swallows hover, so the tooltip that explains
+              why it is disabled has to live on a span around it instead. */}
+          <span title="Copy the review prompt to paste into an agent">
+            <button className="ghost" onClick={() => void copyPrompt()} disabled={comments.length === 0}>
+              <Icon name={copied ? 'check' : 'content_copy'} />
+              {copied ? 'Copied' : 'Copy prompt'}
+            </button>
+          </span>
+          {!client.isStatic && (
+            <button
+              className={reviewed ? 'ghost' : ''}
+              disabled={submitting || diffs.length === 0}
+              onClick={() => setReviewNote((note) => (note === null ? '' : null))}
+              title={
+                hooks > 0
+                  ? `Submitting runs ${hooks} hook(s) on the sbnn server`
+                  : 'Tell whoever is waiting that the review is done'
+              }
+            >
+              <Icon name="task_alt" />
+              {reviewed ? verdictLabel(reviewVerdict) : 'Submit review'}
+            </button>
+          )}
+        </div>
+        <span className="toolbar-divider" />
+        <div className="settings-menu" ref={settingsRef}>
           <button
-            className={reviewed ? 'ghost' : ''}
-            disabled={submitting || diffs.length === 0}
-            onClick={() => setReviewNote((note) => (note === null ? '' : null))}
-            title={
-              hooks > 0
-                ? `Submitting runs ${hooks} hook(s) on the sbnn server`
-                : 'Tell whoever is waiting that the review is done'
-            }
+            className="ghost icon-only"
+            aria-haspopup="true"
+            aria-expanded={settingsOpen}
+            onClick={() => setSettingsOpen((open) => !open)}
+            title="Settings"
           >
-            {reviewed ? verdictLabel(reviewVerdict) : 'Submit review'}
+            <Icon name="settings" />
           </button>
-        )}
-        <button
-          className="ghost"
-          onClick={() => setTheme(nextTheme(theme))}
-          title="Colours: follow the system, or pick one"
-        >
-          {themeLabel(theme)}
-        </button>
-        {!client.isStatic && diffs.length > 0 && (
-          <button
-            className="ghost danger"
-            disabled={closing}
-            onClick={() => void closeReview()}
-            title="Drop this review: its diffs, comments and hooks"
-          >
-            {closing ? 'Closing…' : 'Close'}
-          </button>
-        )}
-        {!narrow && (
-          <>
-            <label className="switch">
-              <input type="checkbox" checked={sidebarWidth > 0} onChange={toggleSidebar} />
-              Files
-            </label>
-            <label className="switch">
-              <input
-                type="checkbox"
-                checked={splitRatio > 0}
-                onChange={toggleDiff}
-                disabled={diffs.length === 0}
-              />
-              Diff
-            </label>
-            <label className="switch">
-              <input
-                type="checkbox"
-                checked={splitRatio < 1}
-                onChange={togglePreview}
-                disabled={diffs.length === 0}
-              />
-              Preview
-            </label>
-          </>
-        )}
+          {settingsOpen && (
+            <div className="settings-panel" role="menu">
+              <div className="settings-row">
+                <span className="settings-label">Theme</span>
+                <div className="toggle sm">
+                  <button
+                    className={theme === 'auto' ? 'active' : ''}
+                    onClick={() => setTheme('auto')}
+                    title="Follow the system"
+                  >
+                    <Icon name="brightness_auto" small />
+                  </button>
+                  <button
+                    className={theme === 'light' ? 'active' : ''}
+                    onClick={() => setTheme('light')}
+                    title="Light"
+                  >
+                    <Icon name="light_mode" small />
+                  </button>
+                  <button
+                    className={theme === 'dark' ? 'active' : ''}
+                    onClick={() => setTheme('dark')}
+                    title="Dark"
+                  >
+                    <Icon name="dark_mode" small />
+                  </button>
+                </div>
+              </div>
+              {!client.isStatic && diffs.length > 0 && (
+                <>
+                  <span className="settings-divider" />
+                  <button
+                    className="settings-item danger"
+                    disabled={closing}
+                    onClick={() => {
+                      setSettingsOpen(false)
+                      void closeReview()
+                    }}
+                    title="Drop this review: its diffs, comments and hooks"
+                  >
+                    <Icon name="close" small />
+                    {closing ? 'Closing…' : 'Close review'}
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+        </div>
       </header>
 
       {narrow && diffs.length > 0 && (
@@ -634,6 +667,13 @@ export function App() {
             onNudge={(direction) =>
               setSidebarWidth((w) => Math.min(SIDEBAR_MAX, Math.max(0, w + direction * SIDEBAR_STEP)))
             }
+            handles={[
+              {
+                icon: sidebarWidth === 0 ? 'chevron_right' : 'chevron_left',
+                title: sidebarWidth === 0 ? 'Show the file list' : 'Hide the file list',
+                onClick: toggleSidebar,
+              },
+            ]}
           />
           <main className="content">
             {diffs.length === 0 ? (
