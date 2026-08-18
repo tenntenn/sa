@@ -121,6 +121,13 @@ one-review-per-group model lined up with GitHub's one-review-per-PR model.
 - Select the lines to comment on by dragging over the line numbers, by
   shift-clicking, or - on a touch screen - by tapping one line and then
   another while the draft is open.
+- **Comment on the preview by selecting text in it.** Let the drag go and a
+  **+** appears where your pointer came up; it opens the same comment form,
+  anchored to the source lines of the blocks you selected. The selection
+  stays highlighted while you write, and goes away when you click elsewhere,
+  press Escape, cancel or post. It needs sbnn's own preview of a whole file:
+  mo renders in a frame sbnn may not read, and a partial preview cannot say
+  which line anything is on.
 - **Suggest a change** drops a ` ```suggestion ` block into the comment,
   pre-filled with the lines as they read today — the same shape GitHub uses.
   It renders as a small diff (the lines now, the lines as proposed) and

@@ -8,6 +8,7 @@ import { DiffStack, type DiffStackHandle, type ScrollFraction } from './componen
 import { Divider } from './components/Divider'
 import { Icon } from './components/Icon'
 import { PreviewFileSection } from './components/PreviewFileSection'
+import { PreviewSelection } from './components/PreviewSelection'
 import { PreviewStack } from './components/PreviewStack'
 import { Sidebar } from './components/Sidebar'
 import { clampRatio, SplitPane, SPLIT_DEFAULT } from './components/SplitPane'
@@ -791,6 +792,13 @@ export function App() {
           </main>
         </div>
       )}
+
+      {/* One for the page, not one per preview: a selection is only ever in
+          one of them, and it says itself which file it is in. It sits here
+          rather than beside the preview because it is pinned to the window,
+          and because both layouts - the stack of files and the phone's
+          single one - need it. */}
+      <PreviewSelection group={group} onChanged={() => void reload()} />
     </div>
   )
 }
