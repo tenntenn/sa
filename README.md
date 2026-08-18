@@ -7,6 +7,8 @@ diff viewer and reviewer. The name reads "sabun" — 差分, Japanese for "diff"
 on the left, a Markdown preview on the right, and review comments you can read
 back from the command line.
 
+![sbnn showing a diff on the left and its Markdown preview on the right](docs/screenshot.png)
+
 It is inspired by [difit](https://github.com/yoshiko-pg/difit), with a few
 deliberate differences:
 
