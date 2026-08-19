@@ -234,9 +234,11 @@ one response that leaves the reviewer having to ask again.
 
 ### 7. Send the next round
 
-Clear the handled comments and send the updated diff so the next round starts
-clean. This is the one case where the diffs stay: the rounds of one review
-belong together.
+Make sure every comment has actually been addressed first: `--clear` empties
+the whole group at once, comments you never got to along with the ones you
+handled — there is no selective clear. Once nothing is left unaddressed,
+clear and send the updated diff so the next round starts clean. This is the
+one case where the diffs stay: the rounds of one review belong together.
 
 ```
 sbnn comments --target <topic> --clear
