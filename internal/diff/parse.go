@@ -31,6 +31,39 @@ func IsMarkdown(p string) bool {
 	return markdownExts[strings.ToLower(path.Ext(p))]
 }
 
+// imageContentTypes maps the extensions sbnn previews as images to the MIME
+// type served for them. It is limited to what a browser actually renders in
+// an <img> tag - heic, heif, tif and tiff are image formats too, but not ones
+// mainstream browsers display.
+var imageContentTypes = map[string]string{
+	".png":  "image/png",
+	".jpg":  "image/jpeg",
+	".jpeg": "image/jpeg",
+	".gif":  "image/gif",
+	".webp": "image/webp",
+	".svg":  "image/svg+xml",
+	".bmp":  "image/bmp",
+	".ico":  "image/x-icon",
+	".avif": "image/avif",
+}
+
+// IsImage reports whether p looks like an image sbnn can preview.
+func IsImage(p string) bool {
+	_, ok := imageContentTypes[strings.ToLower(path.Ext(p))]
+	return ok
+}
+
+// ImageContentType returns the MIME type to serve p's content as, or "" if p
+// is not a previewable image.
+func ImageContentType(p string) string {
+	return imageContentTypes[strings.ToLower(path.Ext(p))]
+}
+
+// IsNotebook reports whether p is a Jupyter notebook.
+func IsNotebook(p string) bool {
+	return strings.ToLower(path.Ext(p)) == ".ipynb"
+}
+
 // Parse parses unified diff text into files.
 func Parse(src string) []*model.File {
 	p := &parser{lines: splitLines(src)}
@@ -416,6 +449,8 @@ func finalize(f *model.File, index int) {
 		f.ViewMode = model.ViewSplit
 	}
 	f.IsMarkdown = IsMarkdown(f.Path())
+	f.IsImage = IsImage(f.Path())
+	f.IsNotebook = IsNotebook(f.Path())
 	f.ID = fileID(f, index)
 }
 

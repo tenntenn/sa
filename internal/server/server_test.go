@@ -436,6 +436,91 @@ func TestFileContentNeedsMarkdown(t *testing.T) {
 	}
 }
 
+const notebookDiff = `diff --git a/analysis.ipynb b/analysis.ipynb
+new file mode 100644
+--- /dev/null
++++ b/analysis.ipynb
+@@ -0,0 +1,3 @@
++{"cells": [{"cell_type": "markdown", "source": ["# Title"]}],
++"metadata": {},
++"nbformat": 4}
+`
+
+func TestFileContentServesNotebook(t *testing.T) {
+	ts, _ := newTestServer(t)
+	var added AddDiffResponse
+	postJSON(t, ts.URL+"/_/api/groups/default/diffs", AddDiffRequest{Content: notebookDiff}, &added)
+	file := added.Diff.Files[0]
+	if !file.IsNotebook {
+		t.Fatal("analysis.ipynb should be flagged as a notebook")
+	}
+
+	var got FileContentResponse
+	resp := getJSON(t, ts.URL+"/_/api/groups/default/diffs/"+added.Diff.ID+"/files/"+file.ID+"/content", &got)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %s", resp.Status)
+	}
+	if !strings.Contains(got.Content, `"cells"`) {
+		t.Errorf("content = %q", got.Content)
+	}
+}
+
+const imageDiff = `diff --git a/logo.png b/logo.png
+new file mode 100644
+Binary files /dev/null and b/logo.png differ
+`
+
+func TestFileImageServesWorktreeFile(t *testing.T) {
+	work := t.TempDir()
+	pngBytes := []byte{0x89, 'P', 'N', 'G', 0x0d, 0x0a, 0x1a, 0x0a, 'f', 'a', 'k', 'e'}
+	if err := os.WriteFile(filepath.Join(work, "logo.png"), pngBytes, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	ts, _ := newTestServer(t)
+	var added AddDiffResponse
+	postJSON(t, ts.URL+"/_/api/groups/default/diffs", AddDiffRequest{Content: imageDiff, BaseDir: work}, &added)
+	file := added.Diff.Files[0]
+	if !file.IsImage {
+		t.Fatal("logo.png should be flagged as an image")
+	}
+
+	resp, err := http.Get(ts.URL + "/_/api/groups/default/diffs/" + added.Diff.ID + "/files/" + file.ID + "/image")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %s", resp.Status)
+	}
+	if ct := resp.Header.Get("Content-Type"); ct != "image/png" {
+		t.Errorf("content-type = %q, want image/png", ct)
+	}
+	got, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != string(pngBytes) {
+		t.Errorf("body = %q, want %q", got, pngBytes)
+	}
+}
+
+func TestFileImageNeedsWorktreeFile(t *testing.T) {
+	ts, _ := newTestServer(t)
+	var added AddDiffResponse
+	postJSON(t, ts.URL+"/_/api/groups/default/diffs", AddDiffRequest{Content: imageDiff}, &added)
+	file := added.Diff.Files[0]
+
+	resp, err := http.Get(ts.URL + "/_/api/groups/default/diffs/" + added.Diff.ID + "/files/" + file.ID + "/image")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status = %s, want 400 when the working tree has nothing to show", resp.Status)
+	}
+}
+
 func TestSuggestionInPrompt(t *testing.T) {
 	ts, _ := newTestServer(t)
 	var added AddDiffResponse

@@ -157,6 +157,7 @@ func (s *Server) handler() http.Handler {
 	mux.HandleFunc("DELETE /_/api/groups/{group}/diffs/{diff}", s.handleDeleteDiff)
 	mux.HandleFunc("GET /_/api/groups/{group}/diffs/{diff}/files/{file}/preview", s.handlePreview)
 	mux.HandleFunc("GET /_/api/groups/{group}/diffs/{diff}/files/{file}/content", s.handleFileContent)
+	mux.HandleFunc("GET /_/api/groups/{group}/diffs/{diff}/files/{file}/image", s.handleFileImage)
 	mux.HandleFunc("GET /_/api/groups/{group}/comments", s.handleComments)
 	mux.HandleFunc("POST /_/api/groups/{group}/comments", s.handleAddComment)
 	mux.HandleFunc("PATCH /_/api/groups/{group}/comments/{id}", s.handleUpdateComment)
@@ -495,6 +496,35 @@ func (s *Server) handleFileContent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, res)
+}
+
+// handleFileImage hands out the raw bytes of an image file, for the <img>
+// tag sbnn's own preview points at. It never involves mo, which cannot show
+// images at all.
+func (s *Server) handleFileImage(w http.ResponseWriter, r *http.Request) {
+	name, ok := s.groupParam(w, r)
+	if !ok {
+		return
+	}
+	d, f, found := s.store.FileContext(name, r.PathValue("diff"), r.PathValue("file"))
+	if !found {
+		http.Error(w, "no such file", http.StatusNotFound)
+		return
+	}
+	data, contentType, err := s.prev.image(d, f)
+	if err != nil {
+		status := http.StatusInternalServerError
+		if errors.Is(err, errNotPreviewable) {
+			status = http.StatusBadRequest
+		}
+		writeJSON(w, status, map[string]string{"error": err.Error()})
+		return
+	}
+	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Cache-Control", "no-store")
+	if _, err := w.Write(data); err != nil {
+		slog.Warn("failed to write response", "error", err)
+	}
 }
 
 func (s *Server) handleComments(w http.ResponseWriter, r *http.Request) {

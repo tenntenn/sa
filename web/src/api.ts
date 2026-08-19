@@ -30,6 +30,16 @@ export function getPreview(group: string, diffId: string, fileId: string): Promi
   )
 }
 
+/** imageURL is what an <img> should be pointed at to show a file's current
+ * image content. Unlike the other endpoints here, nothing fetches it: the
+ * browser does that itself once it is set as a src. */
+export function imageURL(group: string, diffId: string, fileId: string): string {
+  return (
+    `/_/api/groups/${encodeURIComponent(group)}/diffs/${encodeURIComponent(diffId)}` +
+    `/files/${encodeURIComponent(fileId)}/image`
+  )
+}
+
 export interface FileContent {
   path: string
   source: 'worktree' | 'reconstructed'

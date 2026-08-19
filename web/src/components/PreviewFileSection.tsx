@@ -20,13 +20,28 @@ interface Props {
   onUserScroll?: () => void
 }
 
+/** Format is which of sbnn's three renderers a file's preview uses. mo only
+ * ever renders Markdown - it cannot show an image or a notebook at all - so
+ * those two always use sbnn's own renderer regardless of the page's kind
+ * toggle. */
+type Format = 'markdown' | 'image' | 'notebook' | null
+
+function formatOf(file: FileDiff): Format {
+  if (file.isMarkdown) return 'markdown'
+  if (file.isNotebook) return 'notebook'
+  if (file.isImage) return 'image'
+  return null
+}
+
 /**
- * PreviewFileSection shows one file's Markdown preview.
+ * PreviewFileSection shows one file's preview: Markdown, an image, or a
+ * Jupyter notebook's rendered cells - whichever applies.
  *
- * In the live app the preview is rendered by mo. mo forbids framing with
- * "frame-ancestors 'none'", so sbnn serves it through its own loopback proxy,
- * which relaxes that one directive for sbnn's origin. An exported page has no
- * mo behind it and renders the frozen Markdown itself.
+ * In the live app a Markdown preview can be rendered by mo instead. mo
+ * forbids framing with "frame-ancestors 'none'", so sbnn serves it through
+ * its own loopback proxy, which relaxes that one directive for sbnn's
+ * origin. An exported page has no mo behind it and renders everything
+ * itself.
  */
 export function PreviewFileSection({ group, diffId, file, status, kind, active, onUserScroll }: Props) {
   const [preview, setPreview] = useState<PreviewResult | null>(null)
@@ -34,12 +49,27 @@ export function PreviewFileSection({ group, diffId, file, status, kind, active, 
   const [loading, setLoading] = useState(false)
   const [reloadKey, setReloadKey] = useState(0)
   const [openingMo, setOpeningMo] = useState(false)
+  const [imageFailed, setImageFailed] = useState(false)
 
-  const renderHere = kind === 'preview'
-  const previewable = file.isMarkdown
+  const format = formatOf(file)
+  const previewable = format !== null
+  const renderHere = format !== 'markdown' || kind === 'preview'
+
+  const rawImageSrc = format === 'image' ? client.imageSrc(group, diffId, file.id) : undefined
+  // The live endpoint answers the same URL every time, so a reload has to
+  // change the URL itself to bypass the browser's own cache. A static
+  // page's data URL never changes and needs no such busting.
+  const imageSrc =
+    rawImageSrc && !client.isStatic
+      ? `${rawImageSrc}${rawImageSrc.includes('?') ? '&' : '?'}r=${reloadKey}`
+      : rawImageSrc
 
   useEffect(() => {
-    if (!previewable) {
+    setImageFailed(false)
+  }, [imageSrc])
+
+  useEffect(() => {
+    if (format !== 'markdown' && format !== 'notebook') {
       setPreview(null)
       setError(null)
       return
@@ -48,9 +78,12 @@ export function PreviewFileSection({ group, diffId, file, status, kind, active, 
     let cancelled = false
     setLoading(true)
     setError(null)
-    const load = renderHere
-      ? client.previewMarkdown(group, diffId, file.id)
-      : client.preview(group, diffId, file.id)
+    const load =
+      format === 'notebook'
+        ? client.previewNotebook(group, diffId, file.id)
+        : renderHere
+          ? client.previewMarkdown(group, diffId, file.id)
+          : client.preview(group, diffId, file.id)
     load
       .then((p) => {
         if (!cancelled) setPreview(p)
@@ -67,10 +100,10 @@ export function PreviewFileSection({ group, diffId, file, status, kind, active, 
     return () => {
       cancelled = true
     }
-  }, [group, diffId, file, previewable, renderHere, reloadKey, active])
+  }, [group, diffId, file, format, renderHere, reloadKey, active])
 
   const openInMo = async () => {
-    if (!previewable) return
+    if (format !== 'markdown') return
     setOpeningMo(true)
     setError(null)
     try {
@@ -118,11 +151,11 @@ export function PreviewFileSection({ group, diffId, file, status, kind, active, 
             </button>
           </span>
         )}
-        {/* One slot, always present when not static: a direct link once mo's
-            frame has actually loaded, a button that fetches and opens it
-            otherwise - two elements swapping in and out by mode made the
-            header's width jump between "preview" and "mo". */}
+        {/* mo cannot show an image or a notebook at all, so this whole slot
+            - a direct link once mo's frame has loaded, a button that fetches
+            and opens it otherwise - only exists for a Markdown file. */}
         {!client.isStatic &&
+          format === 'markdown' &&
           (preview?.kind === 'frame' && preview.moUrl ? (
             <a className="ghost button" href={preview.moUrl} target="_blank" rel="noreferrer">
               <MoIcon small />
@@ -130,7 +163,7 @@ export function PreviewFileSection({ group, diffId, file, status, kind, active, 
               <Icon name="open_in_new" small />
             </a>
           ) : (
-            <button className="ghost" onClick={() => void openInMo()} disabled={!previewable || openingMo}>
+            <button className="ghost" onClick={() => void openInMo()} disabled={openingMo}>
               <MoIcon small />
               {openingMo ? 'Opening…' : 'mo'}
               <Icon name="open_in_new" small />
@@ -139,13 +172,35 @@ export function PreviewFileSection({ group, diffId, file, status, kind, active, 
       </div>
 
       {!previewable ? (
-        <p className="empty">{filePath(file)} is not Markdown, so there is nothing to preview.</p>
+        <p className="empty">{filePath(file)} has no preview.</p>
+      ) : format === 'image' ? (
+        !active ? (
+          <p className="empty">Not loaded yet…</p>
+        ) : imageSrc ? (
+          <div className="preview-image-wrap" onWheel={onUserScroll} onTouchMove={onUserScroll}>
+            <img
+              key={imageSrc}
+              className="preview-image"
+              src={imageSrc}
+              alt={filePath(file)}
+              onError={() => setImageFailed(true)}
+            />
+            {imageFailed && <p className="error">The image could not be loaded.</p>}
+          </div>
+        ) : (
+          <p className="empty">
+            {filePath(file)} is not in the working tree (it may have been deleted), so there is nothing to
+            preview.
+          </p>
+        )
       ) : !active || loading ? (
-        <p className="empty">{renderHere ? 'Rendering…' : 'Asking mo for a preview…'}</p>
+        <p className="empty">
+          {format === 'markdown' && !renderHere ? 'Asking mo for a preview…' : 'Rendering…'}
+        </p>
       ) : error ? (
         <div className="preview-error">
           <p className="error">{error}</p>
-          {status && !status.moAvailable && (
+          {format === 'markdown' && status && !status.moAvailable && (
             <p className="hint">
               mo renders a richer preview than sbnn's own, and it is not installed here. Install it
               with <code>brew install k1LoW/tap/mo</code> or grab a binary from{' '}
@@ -158,16 +213,18 @@ export function PreviewFileSection({ group, diffId, file, status, kind, active, 
         </div>
       ) : preview?.kind === 'html' ? (
         <div
-          className="markdown"
+          className={format === 'notebook' ? 'notebook' : 'markdown'}
           // What a selection in here would be a comment on. data-line-anchored
           // is what PreviewSelection looks for: renderMarkdown marked every
           // block with the lines it came from, and a whole preview still
           // numbers them the way the file does - a partial one marks the gaps
-          // it skipped instead, so nothing in it can be anchored to a line.
+          // it skipped instead, so nothing in it can be anchored to a line. A
+          // notebook's cells never carry this: its rendered content does not
+          // correspond to the raw .ipynb JSON's line numbers at all.
           data-diff-id={diffId}
           data-file-id={file.id}
           data-path={filePath(file)}
-          data-line-anchored={preview.complete ? 'true' : undefined}
+          data-line-anchored={format === 'markdown' && preview.complete ? 'true' : undefined}
           onWheel={onUserScroll}
           onTouchMove={onUserScroll}
           dangerouslySetInnerHTML={{ __html: preview.html }}

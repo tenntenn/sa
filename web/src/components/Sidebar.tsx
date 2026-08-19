@@ -290,6 +290,12 @@ export function Sidebar({
                       </span>
                     )}
                     {file.isMarkdown && <span className="badge sm" title="Previewable with mo">md</span>}
+                    {file.isImage && <span className="badge sm" title="Previewable as an image">img</span>}
+                    {file.isNotebook && (
+                      <span className="badge sm" title="Previewable as a Jupyter notebook">
+                        ipynb
+                      </span>
+                    )}
                     {count > 0 && <span className="badge sm warn">{count}</span>}
                     <span className="stat add">+{file.additions}</span>
                     <span className="stat del">-{file.deletions}</span>
