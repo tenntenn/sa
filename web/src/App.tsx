@@ -2,7 +2,7 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'rea
 import { groupFromLocation } from './api'
 import { client } from './client'
 import { readSetting, writeSetting } from './storage'
-import type { Comment, Diff, FileDiff, PreviewKind, Status, ViewMode, Verdict } from './types'
+import { isPreviewable, type Comment, type Diff, type FileDiff, type PreviewKind, type Status, type ViewMode, type Verdict } from './types'
 import { DiffFileSection } from './components/DiffFileSection'
 import { DiffStack, type DiffStackHandle, type ScrollFraction } from './components/DiffStack'
 import { Divider } from './components/Divider'
@@ -649,8 +649,8 @@ export function App() {
             className={pane === 'preview' ? 'active' : ''}
             aria-pressed={pane === 'preview'}
             onClick={() => setPane('preview')}
-            disabled={!activeEntry?.file.isMarkdown}
-            title={activeEntry?.file.isMarkdown ? undefined : 'Only Markdown files have a preview'}
+            disabled={!activeEntry || !isPreviewable(activeEntry.file)}
+            title={activeEntry && isPreviewable(activeEntry.file) ? undefined : 'This file has no preview'}
           >
             Preview
           </button>

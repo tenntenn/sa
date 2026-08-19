@@ -311,6 +311,65 @@ func TestIsMarkdown(t *testing.T) {
 	}
 }
 
+func TestIsImage(t *testing.T) {
+	cases := []struct {
+		path string
+		want bool
+	}{
+		{"logo.png", true},
+		{"photo.JPG", true},
+		{"photo.jpeg", true},
+		{"icon.svg", true},
+		{"anim.gif", true},
+		{"pic.webp", true},
+		{"pic.avif", true},
+		{"favicon.ico", true},
+		{"scan.bmp", true},
+		{"README.md", false},
+		{"main.go", false},
+		{"noext", false},
+	}
+	for _, c := range cases {
+		if got := diff.IsImage(c.path); got != c.want {
+			t.Errorf("IsImage(%q) = %v, want %v", c.path, got, c.want)
+		}
+	}
+}
+
+func TestImageContentType(t *testing.T) {
+	cases := []struct {
+		path string
+		want string
+	}{
+		{"logo.png", "image/png"},
+		{"photo.JPEG", "image/jpeg"},
+		{"icon.svg", "image/svg+xml"},
+		{"main.go", ""},
+	}
+	for _, c := range cases {
+		if got := diff.ImageContentType(c.path); got != c.want {
+			t.Errorf("ImageContentType(%q) = %q, want %q", c.path, got, c.want)
+		}
+	}
+}
+
+func TestIsNotebook(t *testing.T) {
+	cases := []struct {
+		path string
+		want bool
+	}{
+		{"analysis.ipynb", true},
+		{"notebooks/EDA.IPYNB", true},
+		{"README.md", false},
+		{"noext", false},
+	}
+	for _, c := range cases {
+		if got := diff.IsNotebook(c.path); got != c.want {
+			t.Errorf("IsNotebook(%q) = %v, want %v", c.path, got, c.want)
+		}
+	}
+}
+
 func TestParseEmpty(t *testing.T) {
 	if files := diff.Parse(""); len(files) != 0 {
 		t.Errorf("got %d files, want 0", len(files))

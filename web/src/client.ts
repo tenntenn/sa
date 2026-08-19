@@ -1,6 +1,7 @@
 import * as api from './api'
 import type { Comment, Diff, Status, Verdict } from './types'
 import { renderMarkdown } from './markdown'
+import { renderNotebook } from './notebook'
 import { buildPrompt } from './prompt'
 import { suggestions } from './suggestion'
 import { readSetting, writeSetting } from './storage'
@@ -58,6 +59,14 @@ export interface SbnnClient {
   /** previewMarkdown renders the Markdown in this page instead, which is
    * what a window too narrow for mo's own layout uses. */
   previewMarkdown(group: string, diffId: string, fileId: string): Promise<PreviewResult>
+  /** previewNotebook renders a Jupyter notebook's cells. mo cannot show a
+   * notebook at all, so this is the only way one is ever previewed. */
+  previewNotebook(group: string, diffId: string, fileId: string): Promise<PreviewResult>
+  /** imageSrc returns what an <img> should point at to show a file's
+   * current image content, or undefined when there is nothing to show. It
+   * is synchronous: the browser fetches the image itself once it is set as
+   * a src, there is nothing for sbnn to await first. */
+  imageSrc(group: string, diffId: string, fileId: string): string | undefined
   subscribe(group: string, onChange: () => void): () => void
 }
 
@@ -70,6 +79,7 @@ export interface StaticPayload {
   diffs: Diff[]
   comments: Comment[]
   previews: Record<string, { content: string; source: string; complete: boolean; path?: string }>
+  images: Record<string, { dataUrl: string; path?: string }>
 }
 
 declare global {
@@ -132,6 +142,19 @@ function createLiveClient(): SbnnClient {
         source: file.source,
         complete: file.complete,
       }
+    },
+    async previewNotebook(group, diffId, fileId) {
+      const file = await api.getFileContent(group, diffId, fileId)
+      return {
+        kind: 'html',
+        html: renderNotebook(file.content),
+        path: file.path,
+        source: file.source,
+        complete: file.complete,
+      }
+    },
+    imageSrc(group, diffId, fileId) {
+      return api.imageURL(group, diffId, fileId)
     },
     subscribe: api.subscribe,
   }
@@ -236,6 +259,20 @@ function createStaticClient(data: StaticPayload): SbnnClient {
     async previewMarkdown(group, diffId, fileId) {
       // An exported page renders its own Markdown either way.
       return this.preview(group, diffId, fileId)
+    },
+    async previewNotebook(_group, diffId, fileId) {
+      const entry = data.previews?.[`${diffId}:${fileId}`]
+      if (!entry) throw new Error('this page carries no preview for that file')
+      return {
+        kind: 'html',
+        html: renderNotebook(entry.content),
+        path: entry.path ?? '',
+        source: entry.source,
+        complete: entry.complete,
+      }
+    },
+    imageSrc(_group, diffId, fileId) {
+      return data.images?.[`${diffId}:${fileId}`]?.dataUrl
     },
     subscribe(_group, onChange) {
       listeners.add(onChange)

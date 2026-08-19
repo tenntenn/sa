@@ -86,7 +86,12 @@ type File struct {
 	// with. sbnn never folds a file it cannot give a reason for.
 	FoldReason string `json:"foldReason,omitempty"`
 	// IsMarkdown reports whether the file can be previewed with mo.
-	IsMarkdown bool    `json:"isMarkdown"`
+	IsMarkdown bool `json:"isMarkdown"`
+	// IsImage reports whether the file can be previewed as an image.
+	IsImage bool `json:"isImage"`
+	// IsNotebook reports whether the file is a Jupyter notebook, previewed
+	// by rendering its cells.
+	IsNotebook bool    `json:"isNotebook"`
 	Hunks      []*Hunk `json:"hunks"`
 }
 

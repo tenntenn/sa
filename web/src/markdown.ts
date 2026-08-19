@@ -75,7 +75,7 @@ function splitFrontmatter(source: string): {
   }
 }
 
-function escapeHTML(s: string): string {
+export function escapeHTML(s: string): string {
   return s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c] ?? c)
 }
 
@@ -99,8 +99,11 @@ DOMPurify.addHook('afterSanitizeAttributes', (node) => {
  * passed the check as an attribute and came back as an element. Turning
  * markup into a DOM safely is a job with a maintained answer, so sbnn uses it
  * rather than keeping its own.
+ *
+ * Exported so the notebook renderer, which sanitises the same way, does not
+ * need a second DOMPurify configuration to keep in sync with this one.
  */
-function sanitize(html: string): string {
+export function sanitize(html: string): string {
   return DOMPurify.sanitize(html, {
     // An exported page is one file with the diff frozen into it; nothing in
     // a preview should be reaching for anything else.

@@ -1185,6 +1185,66 @@ a {
   background: var(--bg-soft);
 }
 
+/* ---------- rendered images ---------- */
+
+.preview-image-wrap {
+  padding: 16px 20px 40px;
+  overflow: auto;
+  text-align: center;
+}
+
+.preview-image {
+  max-width: 100%;
+  max-height: 80vh;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  /* A checkerboard behind the image is what makes transparency visible
+     against either theme's background. */
+  background-image:
+    linear-gradient(45deg, var(--bg-inset) 25%, transparent 25%, transparent 75%, var(--bg-inset) 75%),
+    linear-gradient(45deg, var(--bg-inset) 25%, transparent 25%, transparent 75%, var(--bg-inset) 75%);
+  background-size: 20px 20px;
+  background-position:
+    0 0,
+    10px 10px;
+}
+
+/* ---------- rendered Jupyter notebooks ---------- */
+
+.notebook {
+  padding: 16px 20px 40px;
+  overflow: auto;
+  line-height: 1.7;
+}
+
+.nb-cell {
+  margin-bottom: 1em;
+}
+
+.nb-cell-label {
+  font-size: 12px;
+  font-family: ui-monospace, monospace;
+  color: var(--fg-muted);
+  margin-bottom: 4px;
+}
+
+.nb-code,
+.nb-output {
+  background: var(--bg-inset);
+  padding: 12px;
+  border-radius: 6px;
+  overflow: auto;
+  margin: 0 0 0.5em;
+}
+
+.nb-error {
+  color: var(--danger);
+}
+
+.nb-image img {
+  max-width: 100%;
+}
+
 /* ---------- phones ---------- */
 
 /* The tab bar replaces the pane switches when the panes are shown one at a

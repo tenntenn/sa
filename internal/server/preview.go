@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/tenntenn/sbnn/internal/diff"
 	"github.com/tenntenn/sbnn/internal/mo"
 	"github.com/tenntenn/sbnn/internal/model"
 	"github.com/tenntenn/sbnn/internal/source"
@@ -54,11 +55,13 @@ type FileContentResponse struct {
 	Content  string        `json:"content"`
 }
 
-// content returns the Markdown of a file without involving mo. A phone has
+// content returns the text of a file without involving mo: the Markdown or
+// notebook JSON of a file, for a client that renders it itself. A phone has
 // no room for mo's own chrome inside the preview pane, so the browser
-// renders the Markdown itself there and keeps mo for its own window.
+// renders Markdown there instead of using mo, and a notebook is never
+// something mo can show at all.
 func (p *previewer) content(d *model.Diff, f *model.File) (*FileContentResponse, error) {
-	if err := previewable(f); err != nil {
+	if err := previewableText(f); err != nil {
 		return nil, err
 	}
 	got := source.NewSide(d.BaseDir, f)
@@ -77,13 +80,56 @@ func (p *previewer) content(d *model.Diff, f *model.File) (*FileContentResponse,
 	}, nil
 }
 
-// previewable rejects the files there is no Markdown preview for.
-func previewable(f *model.File) error {
+// image returns the raw bytes of an image file and the content type to serve
+// them as. Unlike Markdown and notebooks, a missing binary cannot be rebuilt
+// from the diff - only the working tree copy is ever shown.
+func (p *previewer) image(d *model.Diff, f *model.File) (data []byte, contentType string, err error) {
+	if err := previewableImage(f); err != nil {
+		return nil, "", err
+	}
+	got := source.NewSide(d.BaseDir, f)
+	if got.Kind != source.FromWorktree || got.Content == "" {
+		return nil, "", fmt.Errorf("%w: nothing to preview for %s", errNotPreviewable, f.Path())
+	}
+	return []byte(got.Content), diff.ImageContentType(f.Path()), nil
+}
+
+// previewableMarkdown rejects the files mo cannot show: mo is a Markdown
+// viewer only.
+func previewableMarkdown(f *model.File) error {
 	switch {
 	case !f.IsMarkdown:
 		return fmt.Errorf("%w: %s is not Markdown", errNotPreviewable, f.Path())
 	case f.IsBinary:
 		return fmt.Errorf("%w: %s is binary", errNotPreviewable, f.Path())
+	case f.Status == model.StatusDeleted:
+		return fmt.Errorf("%w: %s was deleted", errNotPreviewable, f.Path())
+	}
+	return nil
+}
+
+// previewableText rejects the files sbnn's own renderer has no text preview
+// for: Markdown and notebook JSON, neither of which mo can show for a
+// notebook and both of which a narrow client renders itself.
+func previewableText(f *model.File) error {
+	switch {
+	case !f.IsMarkdown && !f.IsNotebook:
+		return fmt.Errorf("%w: %s has no preview", errNotPreviewable, f.Path())
+	case f.IsBinary:
+		return fmt.Errorf("%w: %s is binary", errNotPreviewable, f.Path())
+	case f.Status == model.StatusDeleted:
+		return fmt.Errorf("%w: %s was deleted", errNotPreviewable, f.Path())
+	}
+	return nil
+}
+
+// previewableImage rejects the files there is no image preview for. Images
+// are expected to be binary, unlike Markdown and notebooks, so IsBinary is
+// not itself a reason to refuse one.
+func previewableImage(f *model.File) error {
+	switch {
+	case !f.IsImage:
+		return fmt.Errorf("%w: %s is not an image", errNotPreviewable, f.Path())
 	case f.Status == model.StatusDeleted:
 		return fmt.Errorf("%w: %s was deleted", errNotPreviewable, f.Path())
 	}
@@ -100,7 +146,7 @@ type previewer struct {
 // preview hands the Markdown of f to mo and returns the URLs of the
 // resulting page.
 func (p *previewer) preview(ctx context.Context, group string, d *model.Diff, f *model.File) (*PreviewResponse, error) {
-	if err := previewable(f); err != nil {
+	if err := previewableMarkdown(f); err != nil {
 		return nil, err
 	}
 

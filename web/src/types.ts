@@ -38,6 +38,11 @@ export interface FileDiff {
   deletions: number
   viewMode: ViewMode
   isMarkdown: boolean
+  /** isImage reports whether the file can be previewed as an image. */
+  isImage: boolean
+  /** isNotebook reports whether the file is a Jupyter notebook, previewed by
+   * rendering its cells. */
+  isNotebook: boolean
   /** folded asks the page to keep the file shut until the reader opens it. */
   folded?: boolean
   /** foldReason says why it is shut, so the reader can disagree. */
@@ -130,4 +135,10 @@ export interface Preview {
 /** filePath returns the path a file is identified by. */
 export function filePath(file: FileDiff): string {
   return file.newPath || file.oldPath
+}
+
+/** isPreviewable reports whether the preview pane has anything to show for
+ * file, regardless of which of the three renderers it would use. */
+export function isPreviewable(file: FileDiff): boolean {
+  return file.isMarkdown || file.isImage || file.isNotebook
 }

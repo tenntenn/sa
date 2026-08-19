@@ -7,6 +7,7 @@
 package export
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io/fs"
@@ -14,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/tenntenn/sbnn/internal/diff"
 	"github.com/tenntenn/sbnn/internal/model"
 	"github.com/tenntenn/sbnn/internal/source"
 )
@@ -21,12 +23,20 @@ import (
 // PayloadVersion is the schema version of the embedded data.
 const PayloadVersion = 1
 
-// Preview is the Markdown of one file, frozen at export time.
+// Preview is the Markdown or notebook JSON of one file, frozen at export
+// time.
 type Preview struct {
 	Content  string `json:"content"`
 	Source   string `json:"source"`
 	Complete bool   `json:"complete"`
 	Path     string `json:"path,omitempty"`
+}
+
+// Image is one image file's content, frozen at export time as a data URL so
+// the exported page needs no server to show it.
+type Image struct {
+	DataURL string `json:"dataUrl"`
+	Path    string `json:"path,omitempty"`
 }
 
 // Payload is the data the exported page reads out of window.__SBNN_DATA__.
@@ -38,11 +48,13 @@ type Payload struct {
 	Diffs       []*model.Diff      `json:"diffs"`
 	Comments    []*model.Comment   `json:"comments"`
 	Previews    map[string]Preview `json:"previews"`
+	Images      map[string]Image   `json:"images"`
 }
 
-// Build freezes a group into a payload. Markdown files are resolved the same
-// way the live preview does: the working tree file when it is still there,
-// the new side rebuilt from the diff otherwise.
+// Build freezes a group into a payload. Markdown, notebook and image files
+// are resolved the same way the live preview does: the working tree file
+// when it is still there, the new side rebuilt from the diff otherwise - and
+// for a binary image, only the working tree copy can be shown at all.
 func Build(g *model.Group, saVersion string, now time.Time) *Payload {
 	p := &Payload{
 		Version:     PayloadVersion,
@@ -52,6 +64,7 @@ func Build(g *model.Group, saVersion string, now time.Time) *Payload {
 		Diffs:       make([]*model.Diff, 0, len(g.Diffs)),
 		Comments:    g.Comments,
 		Previews:    map[string]Preview{},
+		Images:      map[string]Image{},
 	}
 	if p.Comments == nil {
 		p.Comments = []*model.Comment{}
@@ -64,18 +77,29 @@ func Build(g *model.Group, saVersion string, now time.Time) *Payload {
 		p.Diffs = append(p.Diffs, &frozen)
 
 		for _, f := range d.Files {
-			if !f.IsMarkdown || f.IsBinary || f.Status == model.StatusDeleted {
-				continue
-			}
-			got := source.NewSide(d.BaseDir, f)
-			if strings.TrimSpace(got.Content) == "" {
-				continue
-			}
-			p.Previews[d.ID+":"+f.ID] = Preview{
-				Content:  got.Content,
-				Source:   string(got.Kind),
-				Complete: got.Complete,
-				Path:     got.Path,
+			key := d.ID + ":" + f.ID
+			switch {
+			case (f.IsMarkdown || f.IsNotebook) && !f.IsBinary && f.Status != model.StatusDeleted:
+				got := source.NewSide(d.BaseDir, f)
+				if strings.TrimSpace(got.Content) == "" {
+					continue
+				}
+				p.Previews[key] = Preview{
+					Content:  got.Content,
+					Source:   string(got.Kind),
+					Complete: got.Complete,
+					Path:     got.Path,
+				}
+			case f.IsImage && f.Status != model.StatusDeleted:
+				got := source.NewSide(d.BaseDir, f)
+				if got.Kind != source.FromWorktree || got.Content == "" {
+					continue
+				}
+				p.Images[key] = Image{
+					DataURL: "data:" + diff.ImageContentType(f.Path()) + ";base64," +
+						base64.StdEncoding.EncodeToString([]byte(got.Content)),
+					Path: got.Path,
+				}
 			}
 		}
 	}

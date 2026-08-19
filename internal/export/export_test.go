@@ -1,6 +1,7 @@
 package export_test
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -70,6 +71,86 @@ func TestBuildFreezesMarkdown(t *testing.T) {
 	}
 	if prev.Source != string("reconstructed") {
 		t.Errorf("source = %q, want reconstructed for a file that is not on disk", prev.Source)
+	}
+}
+
+const notebookAndImageDiff = `diff --git a/analysis.ipynb b/analysis.ipynb
+new file mode 100644
+--- /dev/null
++++ b/analysis.ipynb
+@@ -0,0 +1,1 @@
++{"cells": [], "nbformat": 4}
+diff --git a/logo.png b/logo.png
+new file mode 100644
+Binary files /dev/null and b/logo.png differ
+`
+
+func TestBuildFreezesNotebookAsPreview(t *testing.T) {
+	files := diff.Parse(notebookAndImageDiff)
+	g := &model.Group{
+		Name: "default",
+		Diffs: []*model.Diff{{
+			ID:    "d1",
+			Title: "first",
+			Raw:   notebookAndImageDiff,
+			Files: files,
+		}},
+	}
+	p := export.Build(g, "test", time.Now())
+
+	nb := files[0]
+	if !nb.IsNotebook {
+		t.Fatal("analysis.ipynb should be flagged as a notebook")
+	}
+	prev, ok := p.Previews["d1:"+nb.ID]
+	if !ok {
+		t.Fatalf("no preview for %s", nb.Path())
+	}
+	if !strings.Contains(prev.Content, `"cells"`) || !prev.Complete {
+		t.Errorf("preview = %+v", prev)
+	}
+}
+
+func TestBuildFreezesWorktreeImageAsDataURL(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "logo.png"), []byte("fakepng"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	files := diff.Parse(notebookAndImageDiff)
+	g := &model.Group{
+		Name: "default",
+		Diffs: []*model.Diff{{
+			ID:      "d1",
+			Title:   "first",
+			BaseDir: dir,
+			Raw:     notebookAndImageDiff,
+			Files:   files,
+		}},
+	}
+	p := export.Build(g, "test", time.Now())
+
+	img := files[1]
+	if !img.IsImage {
+		t.Fatal("logo.png should be flagged as an image")
+	}
+	got, ok := p.Images["d1:"+img.ID]
+	if !ok {
+		t.Fatalf("no image for %s", img.Path())
+	}
+	if want := "data:image/png;base64," + base64.StdEncoding.EncodeToString([]byte("fakepng")); got.DataURL != want {
+		t.Errorf("dataUrl = %q, want %q", got.DataURL, want)
+	}
+}
+
+func TestBuildSkipsImageWithoutWorktreeFile(t *testing.T) {
+	files := diff.Parse(notebookAndImageDiff)
+	g := &model.Group{
+		Name:  "default",
+		Diffs: []*model.Diff{{ID: "d1", Title: "first", Raw: notebookAndImageDiff, Files: files}},
+	}
+	p := export.Build(g, "test", time.Now())
+	if len(p.Images) != 0 {
+		t.Errorf("images = %+v, want none without a working tree copy", p.Images)
 	}
 }
 
