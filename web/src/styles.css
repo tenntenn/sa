@@ -165,7 +165,11 @@ a.icon-only.button {
   position: absolute;
   top: calc(100% + 6px);
   right: 0;
-  z-index: 2;
+  /* Above the in-content sticky toolbars/headers (z-index up to 2), which
+     otherwise paint over this menu: .topbar creates no stacking context of
+     its own, so equal z-indices fall back to DOM order and the scrolled
+     content wins. */
+  z-index: 20;
   display: flex;
   flex-direction: column;
   gap: 8px;
